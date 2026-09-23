@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+body {
+  background-color: #efede4;
+  color: #1c1c18;
+  font-family: 'IBM Plex Sans', sans-serif;
+}
+
+.font-display {
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+.field {
+  @apply w-full rounded-md border border-line bg-white px-3 py-2 text-sm outline-none focus:border-signal;
+}
+
+.label {
+  @apply block text-sm font-medium mb-1;
+}
+
+.btn-primary {
+  @apply inline-flex items-center justify-center rounded-md bg-ink px-4 py-2 text-sm font-semibold text-white hover:bg-black transition disabled:opacity-50;
+}
+
+.btn-ghost {
+  @apply inline-flex items-center justify-center rounded-md border border-line px-4 py-2 text-sm font-semibold hover:border-signal transition;
+}
+
+.card {
+  @apply bg-white border border-line rounded-lg;
+}
+
+.error-text {
+  @apply text-sm text-crit mt-1;
+}
