@@ -12,6 +12,7 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+  const [generatedCode, setGeneratedCode] = useState<string | null>(null);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -32,22 +33,37 @@ export default function RegisterPage() {
       return;
     }
 
+    const code = res.code || "";
+    setGeneratedCode(code);
     setSent(true);
-    const codeParam = (res as any)?.code ? `&code=${encodeURIComponent((res as any).code)}` : "";
+
+    const codeParam = code ? `&code=${encodeURIComponent(code)}` : "";
     router.push(`/verify-account?email=${encodeURIComponent(form.email)}&sent=1${codeParam}`);
   }
 
   if (sent) {
     return (
       <main className="max-w-md mx-auto px-8 py-20">
-        <div className="card p-8 text-center">
-          <h1 className="font-display text-xl font-semibold mb-3">Check your email</h1>
-          <p className="text-sm text-black/60 mb-6">
+        <div className="card p-8 text-center space-y-4">
+          <h1 className="font-display text-xl font-semibold">Check your email</h1>
+          <p className="text-sm text-black/60">
             A 6-digit verification code was sent to <b>{form.email}</b>.
           </p>
-          <Link href={`/verify-account?email=${encodeURIComponent(form.email)}`} className="btn-primary">
-            Enter verification code
-          </Link>
+          {generatedCode && (
+            <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-md text-sm text-emerald-700 dark:text-emerald-300 font-medium">
+              Verification Code: <span className="font-mono font-bold tracking-widest text-base">{generatedCode}</span>
+            </div>
+          )}
+          <div>
+            <Link
+              href={`/verify-account?email=${encodeURIComponent(form.email)}${
+                generatedCode ? `&code=${encodeURIComponent(generatedCode)}` : ""
+              }`}
+              className="btn-primary w-full inline-block"
+            >
+              Enter verification code
+            </Link>
+          </div>
         </div>
       </main>
     );

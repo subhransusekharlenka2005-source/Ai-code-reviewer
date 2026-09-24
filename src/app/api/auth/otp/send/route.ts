@@ -20,7 +20,6 @@ export async function POST(req: NextRequest) {
 
     const { email } = parsed.data;
 
-    // Check if user exists (or prepare fallback)
     let username = email.split("@")[0];
     try {
       const existingUser = await prisma.user.findFirst({
@@ -30,7 +29,7 @@ export async function POST(req: NextRequest) {
         username = existingUser.username;
       }
     } catch {
-      // Database offline/connecting; continue with email username
+      // Database offline/connecting
     }
 
     const code = generateOtp();
@@ -51,11 +50,18 @@ export async function POST(req: NextRequest) {
       emailSent = false;
     }
 
+    console.log("\n========================================================");
+    console.log(`[LOGIN OTP] Code for ${email} is: >>> ${code} <<<`);
+    console.log("========================================================\n");
+
     return NextResponse.json({
       ok: true,
       email,
-      message: "A 6-digit login code has been sent to your email.",
-      code: !emailSent ? code : undefined,
+      code,
+      emailSent,
+      message: emailSent
+        ? "A 6-digit login code has been sent to your email."
+        : `Login verification code generated: ${code}`,
     });
   } catch (err: any) {
     console.error("Login OTP send error:", err);

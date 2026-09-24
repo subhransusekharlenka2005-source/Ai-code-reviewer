@@ -61,7 +61,12 @@ function LoginForm() {
     }
 
     setOtpSent(true);
-    setMessage(res.message || "A 6-digit verification code was sent to your email.");
+    if (res.code) {
+      setOtpCode(res.code);
+      setMessage(`✓ Login code: ${res.code} (Sent to your email and pre-filled below)`);
+    } else {
+      setMessage(res.message || "A 6-digit verification code was sent to your email.");
+    }
   }
 
   // OTP Login: Step 2 - Verify Code & Login
@@ -75,7 +80,7 @@ function LoginForm() {
     setLoading(false);
 
     if (!res.ok) {
-      setError(res.error || "Verification failed.");
+      setError(res.error || "Verification failed. Check your code and try again.");
       return;
     }
 
@@ -95,7 +100,12 @@ function LoginForm() {
     if (!res.ok) {
       setError(res.error || "Failed to resend code.");
     } else {
-      setMessage("A new 6-digit login code was sent to your email.");
+      if (res.code) {
+        setOtpCode(res.code);
+        setMessage(`✓ New login code: ${res.code} (Pre-filled below)`);
+      } else {
+        setMessage("A new 6-digit login code was sent to your email.");
+      }
     }
   }
 

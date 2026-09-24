@@ -56,7 +56,8 @@ export async function sendMail(
 
   try {
     await transporter.sendMail({
-      from: EMAIL_FROM || (SMTP_USER ? `AI Code Reviewer <${SMTP_USER}>` : "AI Code Reviewer <no-reply@example.com>"),
+      from: (SMTP_USER ? `AI Code Reviewer <${SMTP_USER}>` : EMAIL_FROM) || "AI Code Reviewer <no-reply@example.com>",
+      replyTo: EMAIL_FROM || undefined,
       to,
       subject,
       html,

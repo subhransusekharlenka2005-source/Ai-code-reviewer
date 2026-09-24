@@ -127,7 +127,7 @@ export async function resendOtpApi(email: string): Promise<AuthResult> {
     if (!res.ok) {
       return { ok: false, error: data?.error || "Could not resend code." };
     }
-    return { ok: true, message: "A new code was sent." };
+    return { ok: true, message: data?.message || "A new code was sent.", code: data?.code };
   } catch (err: any) {
     return { ok: false, error: err?.message || "Could not reach the server." };
   }

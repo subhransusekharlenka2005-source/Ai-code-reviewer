@@ -20,7 +20,14 @@ export async function POST(req: NextRequest) {
 
     // Check if account already exists in database (if database is connected)
     try {
-      const existing = await prisma.user.findFirst({ where: { OR: [{ email }, { username }] } });
+      const existing = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { email: { equals: email, mode: "insensitive" } },
+            { username: { equals: username, mode: "insensitive" } },
+          ],
+        },
+      });
       if (existing?.emailVerified) {
         return NextResponse.json({ error: "An account with that email or username already exists." }, { status: 409 });
       }
@@ -39,6 +46,7 @@ export async function POST(req: NextRequest) {
       username,
       passwordHash,
       code,
+      purpose: "REGISTER",
     });
 
     let emailSent = true;
@@ -49,10 +57,18 @@ export async function POST(req: NextRequest) {
       emailSent = false;
     }
 
+    console.log("\n========================================================");
+    console.log(`[REGISTRATION OTP] Code for ${email} is: >>> ${code} <<<`);
+    console.log("========================================================\n");
+
     return NextResponse.json({
       ok: true,
       email,
-      code: !emailSent ? code : undefined,
+      code,
+      emailSent,
+      message: emailSent
+        ? "A 6-digit verification code was sent to your email."
+        : `Verification code generated: ${code}`,
     });
   } catch (err: any) {
     console.error("Registration error:", err);

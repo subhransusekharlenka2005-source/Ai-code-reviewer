@@ -77,10 +77,14 @@ export async function createSession(userId: string, fallbackUser?: Partial<User>
     token = createStatelessSessionToken(fallbackUser || { id: userId });
   }
 
+  const isSecure =
+    process.env.NODE_ENV === "production" &&
+    !process.env.APP_URL?.startsWith("http://localhost");
+
   const cookieStore = await cookies();
   cookieStore.set(COOKIE_NAME, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: isSecure,
     sameSite: "lax",
     path: "/",
     expires: new Date(Date.now() + SESSION_TTL_MS),
@@ -89,6 +93,10 @@ export async function createSession(userId: string, fallbackUser?: Partial<User>
 
 export async function destroySession() {
   try {
+    const isSecure =
+      process.env.NODE_ENV === "production" &&
+      !process.env.APP_URL?.startsWith("http://localhost");
+
     const cookieStore = await cookies();
     const token = cookieStore.get(COOKIE_NAME)?.value;
     if (token && !token.startsWith("stateless.")) {
@@ -96,7 +104,7 @@ export async function destroySession() {
     }
     cookieStore.set(COOKIE_NAME, "", {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: isSecure,
       sameSite: "lax",
       path: "/",
       maxAge: 0,
