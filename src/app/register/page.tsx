@@ -33,7 +33,8 @@ export default function RegisterPage() {
     }
 
     setSent(true);
-    router.push(`/verify-account?email=${encodeURIComponent(form.email)}&sent=1`);
+    const codeParam = (res as any)?.code ? `&code=${encodeURIComponent((res as any).code)}` : "";
+    router.push(`/verify-account?email=${encodeURIComponent(form.email)}&sent=1${codeParam}`);
   }
 
   if (sent) {

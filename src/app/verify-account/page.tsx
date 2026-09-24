@@ -10,12 +10,17 @@ function VerifyAccountForm() {
   const router = useRouter();
   const params = useSearchParams();
   const initialEmail = params.get("email") || "";
+  const initialCode = params.get("code") || "";
   const justSent = params.get("sent") === "1";
   const [email, setEmail] = useState(initialEmail);
-  const [code, setCode] = useState("");
+  const [code, setCode] = useState(initialCode);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(
-    justSent && initialEmail ? `A 6-digit verification code was sent to ${initialEmail}. Please check your inbox or spam folder.` : null
+    initialCode
+      ? `Verification code: ${initialCode}`
+      : justSent && initialEmail
+      ? `A 6-digit verification code was sent to ${initialEmail}. Please check your inbox or spam folder.`
+      : null
   );
   const [loading, setLoading] = useState(false);
 

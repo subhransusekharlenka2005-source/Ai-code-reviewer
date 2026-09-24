@@ -60,9 +60,29 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  let reviewId: string | undefined;
+  let createdAt: string | undefined;
+
   if (user) {
     try {
-      await prisma.codeReview.create({
+      // Upsert user to ensure foreign key constraint succeeds in Neon/Postgres
+      await prisma.user.upsert({
+        where: { id: user.id },
+        update: {
+          username: user.username,
+          email: user.email,
+        },
+        create: {
+          id: user.id,
+          username: user.username || user.email.split("@")[0],
+          email: user.email,
+          displayName: user.displayName || user.username,
+          passwordHash: "",
+          emailVerified: true,
+        },
+      }).catch(() => null);
+
+      const saved = await prisma.codeReview.create({
         data: {
           userId: user.id,
           language: parsed.data.language,
@@ -72,10 +92,12 @@ export async function POST(req: NextRequest) {
           score: result.score,
         },
       });
+      reviewId = saved.id;
+      createdAt = saved.createdAt.toISOString();
     } catch (saveError) {
       console.warn("Could not save review to database history:", saveError);
     }
   }
 
-  return NextResponse.json({ ...result, provider });
+  return NextResponse.json({ ...result, provider, reviewId, createdAt });
 }

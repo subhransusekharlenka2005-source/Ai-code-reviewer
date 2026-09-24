@@ -55,6 +55,23 @@ export default function ReviewerPage() {
       setFixedCode(res.data.fixedCode);
       setProvider(res.data.provider);
       setActiveFilter("all");
+
+      // Save to client history store so user never loses their history
+      try {
+        const stored = JSON.parse(localStorage.getItem("ai_code_reviews") || "[]");
+        const entry = {
+          id: (res.data as any).reviewId || "rev-" + Date.now(),
+          language,
+          originalCode: code,
+          fixedCode: res.data.fixedCode,
+          score: res.data.score,
+          createdAt: (res.data as any).createdAt || new Date().toISOString(),
+        };
+        const updated = [entry, ...stored.filter((x: any) => x.id !== entry.id)].slice(0, 50);
+        localStorage.setItem("ai_code_reviews", JSON.stringify(updated));
+      } catch {
+        // ignore storage error
+      }
     }
   }
 
