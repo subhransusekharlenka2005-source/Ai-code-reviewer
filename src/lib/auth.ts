@@ -49,17 +49,24 @@ export async function getSessionUser(): Promise<User | null> {
   const token = cookieStore.get(COOKIE_NAME)?.value;
   if (!token) return null;
 
-  const session = await prisma.session.findUnique({
-    where: { token },
-    include: { user: true },
-  });
+  try {
+    const session = await prisma.session.findUnique({
+      where: { token },
+      include: { user: true },
+    });
 
-  if (!session || session.expiresAt <= new Date()) {
-    if (session) await prisma.session.delete({ where: { id: session.id } });
+    if (!session || session.expiresAt <= new Date()) {
+      if (session) {
+        await prisma.session.delete({ where: { id: session.id } }).catch(() => null);
+      }
+      return null;
+    }
+
+    return session.user;
+  } catch (err) {
+    console.error("Database error in getSessionUser:", err);
     return null;
   }
-
-  return session.user;
 }
 
 export async function requireUser(): Promise<User> {

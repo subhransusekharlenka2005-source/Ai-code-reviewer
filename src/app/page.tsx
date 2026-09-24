@@ -15,9 +15,10 @@ export default function LandingPage() {
               Register for a free account, paste a snippet, and get a structured
               breakdown of correctness, security, and performance issues.
             </p>
-            <div className="flex gap-4 mb-8">
-              <Link href="/register" className="btn-primary bg-signal hover:bg-blue-700">Start reviewing</Link>
+            <div className="flex flex-wrap gap-4 mb-8">
+              <Link href="/reviewer" className="btn-primary bg-signal hover:bg-blue-700">Start reviewing free</Link>
               <Link href="/login" className="btn-ghost border-white/20 text-white hover:border-white/50">Log in</Link>
+              <Link href="/register" className="btn-ghost border-white/20 text-white hover:border-white/50">Create account</Link>
             </div>
             <div className="flex flex-wrap gap-2">
               {LANGUAGES.map((l) => (

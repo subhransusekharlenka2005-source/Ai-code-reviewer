@@ -11,10 +11,10 @@ export default async function Navbar() {
         AI Code Reviewer
       </Link>
       <div className="flex items-center gap-5 text-sm">
+        <Link href="/reviewer" className="opacity-80 hover:opacity-100 font-medium">Reviewer</Link>
         {user ? (
           <>
             <Link href="/dashboard" className="opacity-80 hover:opacity-100">Dashboard</Link>
-            <Link href="/reviewer" className="opacity-80 hover:opacity-100">Reviewer</Link>
             <Link href="/history" className="opacity-80 hover:opacity-100">History</Link>
             {user.role === "ADMIN" && (
               <Link href="/admin" className="opacity-80 hover:opacity-100">Admin</Link>
@@ -29,7 +29,7 @@ export default async function Navbar() {
         ) : (
           <>
             <Link href="/login" className="opacity-80 hover:opacity-100">Log in</Link>
-            <Link href="/register" className="bg-signal rounded px-3 py-1.5 font-semibold">
+            <Link href="/register" className="bg-signal rounded px-3 py-1.5 font-semibold hover:bg-blue-700">
               Register
             </Link>
           </>
