@@ -5,22 +5,14 @@ import { destroySession } from "@/lib/auth";
 
 const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || "session_token";
 
-export async function POST(req: NextRequest) {
+export async function GET(req: NextRequest) {
   await destroySession();
-
-  const accept = req.headers.get("accept") || "";
-  if (accept.includes("application/json")) {
-    const res = NextResponse.json({ ok: true });
-    res.cookies.set(COOKIE_NAME, "", { path: "/", maxAge: 0, expires: new Date(0) });
-    return res;
-  }
-
   const response = NextResponse.redirect(new URL("/login?logged_out=1", req.url), 303);
   response.cookies.set(COOKIE_NAME, "", { path: "/", maxAge: 0, expires: new Date(0) });
   return response;
 }
 
-export async function GET(req: NextRequest) {
+export async function POST(req: NextRequest) {
   await destroySession();
   const response = NextResponse.redirect(new URL("/login?logged_out=1", req.url), 303);
   response.cookies.set(COOKIE_NAME, "", { path: "/", maxAge: 0, expires: new Date(0) });

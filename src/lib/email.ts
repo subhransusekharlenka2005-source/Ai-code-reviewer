@@ -99,6 +99,30 @@ export function otpEmailHtml(code: string) {
   `;
 }
 
+export function loginOtpEmailHtml(code: string) {
+  return `
+  <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 28px; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px;">
+    <div style="margin-bottom: 24px;">
+      <h2 style="margin: 0 0 8px 0; color: #111827; font-size: 20px; font-weight: 700;">AI Code Reviewer</h2>
+      <p style="margin: 0; color: #4b5563; font-size: 14px;">One-Time Login Code</p>
+    </div>
+    <p style="color: #374151; font-size: 15px; line-height: 1.5; margin-bottom: 20px;">
+      Please use the 6-digit one-time password below to sign in to your AI Code Reviewer account:
+    </p>
+    <div style="background-color: #f3f4f6; border-radius: 8px; padding: 18px; text-align: center; margin: 24px 0;">
+      <span style="font-family: monospace; font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #111827;">${code}</span>
+    </div>
+    <p style="color: #6b7280; font-size: 13px; line-height: 1.5; margin-bottom: 12px;">
+      • This code is valid for <strong>10 minutes</strong>.<br>
+      • If you did not request this login code, you can safely ignore this email.
+    </p>
+    <p style="color: #9ca3af; font-size: 12px; margin-top: 24px; border-top: 1px solid #e5e7eb; padding-top: 16px;">
+      AI Code Reviewer • Automated Quality Assurance
+    </p>
+  </div>
+  `;
+}
+
 export function emailChangeOtpHtml(code: string, newEmail: string) {
   return `<p>We received a request to change your AI Code Reviewer email to <b>${newEmail}</b>.</p>
   <p>Your verification code is:</p>
@@ -106,7 +130,32 @@ export function emailChangeOtpHtml(code: string, newEmail: string) {
   <p>This code expires in 10 minutes.</p>`;
 }
 
-export function passwordResetEmailHtml(link: string) {
-  return `<p>We received a request to reset your AI Code Reviewer password.</p>
-  <p><a href="${link}">Choose a new password</a>. This link expires in 1 hour.</p>`;
+export function passwordResetEmailHtml(link: string, code?: string) {
+  return `
+  <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 28px; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px;">
+    <div style="margin-bottom: 24px;">
+      <h2 style="margin: 0 0 8px 0; color: #111827; font-size: 20px; font-weight: 700;">AI Code Reviewer</h2>
+      <p style="margin: 0; color: #4b5563; font-size: 14px;">Password Reset Request</p>
+    </div>
+    <p style="color: #374151; font-size: 15px; line-height: 1.5; margin-bottom: 20px;">
+      We received a request to reset your AI Code Reviewer password. Click the link below to choose a new password:
+    </p>
+    <div style="text-align: center; margin: 24px 0;">
+      <a href="${link}" style="display: inline-block; background-color: #2563eb; color: #ffffff; padding: 12px 24px; font-size: 15px; font-weight: 600; text-decoration: none; border-radius: 8px;">Reset My Password</a>
+    </div>
+    ${code ? `
+    <div style="background-color: #f3f4f6; border-radius: 8px; padding: 14px; text-align: center; margin: 20px 0;">
+      <p style="margin: 0 0 6px 0; font-size: 13px; color: #4b5563;">Or enter this 6-digit reset code on the reset page:</p>
+      <span style="font-family: monospace; font-size: 26px; font-weight: 800; letter-spacing: 6px; color: #111827;">${code}</span>
+    </div>
+    ` : ""}
+    <p style="color: #6b7280; font-size: 13px; line-height: 1.5; margin-bottom: 12px;">
+      • This reset link and code are valid for <strong>1 hour</strong>.<br>
+      • If you did not request a password reset, you can safely ignore this email.
+    </p>
+    <p style="color: #9ca3af; font-size: 12px; margin-top: 24px; border-top: 1px solid #e5e7eb; padding-top: 16px;">
+      AI Code Reviewer • Automated Quality Assurance
+    </p>
+  </div>
+  `;
 }

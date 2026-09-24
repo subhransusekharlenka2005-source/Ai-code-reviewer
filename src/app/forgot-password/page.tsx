@@ -2,26 +2,32 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { forgotPasswordApi } from "@/services/authService";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setError(null);
+    setMessage(null);
     setLoading(true);
-    try {
-      const res = await fetch("/api/auth/forgot-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
-      const data = await res.json();
-      setMessage(data.message || "If that email is registered, a reset link is on its way.");
-    } finally {
-      setLoading(false);
+
+    const res = await forgotPasswordApi(email);
+    setLoading(false);
+
+    if (!res.ok) {
+      setError(res.error || "Could not process request.");
+      return;
     }
+
+    setMessage(
+      res.message ||
+        "If that email is registered, a password reset link and 6-digit code have been sent to your inbox."
+    );
   }
 
   return (
@@ -29,20 +35,45 @@ export default function ForgotPasswordPage() {
       <h1 className="font-display text-2xl font-semibold mb-6">Reset your password</h1>
       <form onSubmit={onSubmit} className="card p-6 space-y-4">
         {message ? (
-          <p className="text-sm text-black/70">{message}</p>
+          <div className="space-y-4">
+            <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-md text-sm text-emerald-700 dark:text-emerald-300 font-medium">
+              ✓ {message}
+            </div>
+            <p className="text-xs text-black/60 dark:text-white/60">
+              Check your inbox or spam folder for the email containing your reset link and 6-digit code.
+            </p>
+            <div className="pt-2">
+              <Link
+                href={`/reset-password?email=${encodeURIComponent(email)}`}
+                className="btn-primary w-full block text-center"
+              >
+                Enter reset code
+              </Link>
+            </div>
+          </div>
         ) : (
           <>
             <div>
-              <label className="label">Email</label>
-              <input className="field" type="email" value={email} required
-                onChange={(e) => setEmail(e.target.value)} />
+              <label className="label">Email address</label>
+              <input
+                className="field"
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                required
+                onChange={(e) => setEmail(e.target.value)}
+              />
             </div>
+            {error && <p className="error-text">{error}</p>}
+            <p className="text-xs text-black/60 dark:text-white/60">
+              We'll send you a password reset link and a 6-digit verification code.
+            </p>
             <button className="btn-primary w-full" disabled={loading}>
-              {loading ? "Sending…" : "Send reset link"}
+              {loading ? "Sending reset email…" : "Send reset link & code"}
             </button>
           </>
         )}
-        <p className="text-sm text-center">
+        <p className="text-sm text-center pt-2 border-t border-line/50">
           <Link href="/login" className="text-signal font-medium">Back to login</Link>
         </p>
       </form>

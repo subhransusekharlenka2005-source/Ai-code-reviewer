@@ -10,6 +10,15 @@ export const registerSchema = z.object({
   path: ["confirmPassword"],
 });
 
+export const requestOtpSchema = z.object({
+  email: z.string().trim().toLowerCase().email("Please enter a valid email address"),
+});
+
+export const loginOtpSchema = z.object({
+  email: z.string().trim().toLowerCase().email("Please enter a valid email address"),
+  code: z.string().regex(/^\d{6}$/, "Enter the 6-digit code"),
+});
+
 export const verifyOtpSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
   code: z.string().regex(/^\d{6}$/, "Enter the 6-digit code"),
@@ -21,13 +30,14 @@ export const loginSchema = z.object({
 });
 
 export const forgotPasswordSchema = z.object({
-  email: z.string().trim().toLowerCase().email(),
+  email: z.string().trim().toLowerCase().email("Please enter a valid email address"),
 });
 
 export const resetPasswordSchema = z.object({
-  token: z.string().min(1),
-  password: z.string().min(8).max(128),
-  confirmPassword: z.string(),
+  token: z.string().min(1, "Reset token or code is required"),
+  email: z.string().trim().toLowerCase().email().optional(),
+  password: z.string().min(8, "Password must be at least 8 characters").max(128),
+  confirmPassword: z.string().min(1, "Please confirm your password"),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords do not match",
   path: ["confirmPassword"],

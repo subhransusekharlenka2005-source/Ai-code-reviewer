@@ -88,14 +88,32 @@ export async function createSession(userId: string, fallbackUser?: Partial<User>
 }
 
 export async function destroySession() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(COOKIE_NAME)?.value;
-  if (token) await prisma.session.deleteMany({ where: { token } });
-  cookieStore.delete(COOKIE_NAME);
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get(COOKIE_NAME)?.value;
+    if (token && !token.startsWith("stateless.")) {
+      await prisma.session.deleteMany({ where: { token } }).catch(() => null);
+    }
+    cookieStore.set(COOKIE_NAME, "", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 0,
+      expires: new Date(0),
+    });
+    cookieStore.delete(COOKIE_NAME);
+  } catch (err) {
+    console.error("Error destroying session:", err);
+  }
 }
 
 export async function destroyAllSessionsForUser(userId: string) {
-  await prisma.session.deleteMany({ where: { userId } });
+  try {
+    await prisma.session.deleteMany({ where: { userId } }).catch(() => null);
+  } catch (err) {
+    console.error("Error destroying user sessions:", err);
+  }
 }
 
 export async function getSessionUser(): Promise<User | null> {

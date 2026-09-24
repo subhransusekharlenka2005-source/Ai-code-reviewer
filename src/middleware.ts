@@ -18,9 +18,11 @@ export function middleware(req: NextRequest) {
   const isProtected = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
   if (!isProtected) return NextResponse.next();
 
-  const hasCookie = req.cookies.has(COOKIE_NAME);
-  if (!hasCookie) {
+  const token = req.cookies.get(COOKIE_NAME)?.value;
+  const hasValidCookie = Boolean(token && token.trim().length > 0);
+  if (!hasValidCookie) {
     const loginUrl = new URL("/login", req.url);
+    loginUrl.searchParams.set("redirect", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
