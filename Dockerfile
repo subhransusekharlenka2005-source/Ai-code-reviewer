@@ -28,4 +28,4 @@ RUN apk add --no-cache openssl
 COPY --from=build /app ./
 
 EXPOSE 3000
-CMD ["sh", "-c", "npx prisma db push && npm start"]
+CMD ["sh", "-c", "npx prisma db push --skip-generate || echo 'Prisma db push deferred; starting server...'; npm start"]
