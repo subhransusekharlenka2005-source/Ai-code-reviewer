@@ -1,26 +1,31 @@
-# Run locally
+## Recommended Database: Neon Serverless PostgreSQL
 
-## Recommended: Docker
+To connect to **Neon** (`https://neon.tech`):
+1. Create a free PostgreSQL project on Neon.
+2. Copy your connection string from the Neon dashboard (e.g., `postgresql://username:password@ep-xyz.neon.tech/neondb?sslmode=require`).
+3. In your `.env` file (and in your Vercel Project Environment Variables):
+   ```env
+   DATABASE_URL="postgresql://username:password@ep-xyz.neon.tech/neondb?sslmode=require"
+   ```
+4. Push your schema to Neon:
+   ```bash
+   npx prisma db push
+   ```
+5. All your users, reviews, and history will persist permanently in Neon.
 
-Requirements: Docker Desktop.
+## Running Locally
 
-1. Copy `.env.example` to `.env`.
-2. Run `docker compose up --build`.
+1. Copy `.env.example` to `.env` and fill in your `DATABASE_URL` (Neon or any PostgreSQL).
+2. Start the application:
+   ```bash
+   npm run dev
+   ```
+   Or with Docker:
+   ```bash
+   docker compose up -d
+   ```
 3. Open `http://localhost:3000`.
-4. Only port `3000` is exposed on your computer. PostgreSQL is private to the Docker network.
-5. Without SMTP settings, registration/reset emails are printed in the app logs. View them with `docker compose logs -f app`.
-
-To stop:
-
-```bash
-docker compose down
-```
-
-To remove the local database too:
-
-```bash
-docker compose down -v
-```
+4. Without SMTP settings, registration OTP emails are logged in the console.
 
 ## If Docker is not available
 
