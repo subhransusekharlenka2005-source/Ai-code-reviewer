@@ -161,9 +161,18 @@ export function reviewCode(language: string, code: string): ReviewResult {
   // 3. PYTHON DEEP ANALYSIS & CORRECTIONS
   // =========================================================================
   if (lower.includes("python")) {
+    let insideDef = false;
+
     lines.forEach((lineText, idx) => {
       const lineIndex = idx + 1;
       const trimmed = lineText.trim();
+      const currentIndent = lineText.match(/^\s*/)?.[0].length ?? 0;
+
+      if (/^def\s+\w+/.test(trimmed)) {
+        insideDef = true;
+      } else if (/^(class|def)\b/.test(trimmed) && currentIndent === 0) {
+        insideDef = /^def\b/.test(trimmed);
+      }
 
       // Missing colon at end of compound statements
       const colonMatch = trimmed.match(/^(def\s+\w+\s*\(.*?\)|class\s+\w+|if\b.+|elif\b.+|else|for\b.+|while\b.+|try|except\b.*?|finally|with\b.+)$/);
@@ -177,6 +186,55 @@ export function reviewCode(language: string, code: string): ReviewResult {
         });
       }
 
+      // Indentation check: line immediately following a compound statement header must be indented
+      const isHeader = trimmed.match(/^(def\s+\w+\s*\(.*?\)|class\s+\w+|if\b.+|elif\b.+|else|for\b.+|while\b.+|try|except\b.*?|finally|with\b.+):?$/);
+      if (isHeader && !trimmed.startsWith("#")) {
+        let nextIdx = idx + 1;
+        while (nextIdx < lines.length && (lines[nextIdx].trim() === "" || lines[nextIdx].trim().startsWith("#"))) {
+          nextIdx++;
+        }
+        if (nextIdx < lines.length) {
+          const nextLine = lines[nextIdx];
+          const nextIndent = nextLine.match(/^\s*/)?.[0].length ?? 0;
+          if (nextIndent <= currentIndent) {
+            issues.push({
+              severity: "error",
+              line: nextIdx + 1,
+              title: "IndentationError: expected an indented block",
+              message: `In Python, the block following '${trimmed.split(/[\s(]/)[0]}' on line ${lineIndex} must be indented. Line ${nextIdx + 1} has no indentation.`,
+              suggestion: `Indent line ${nextIdx + 1} by 4 spaces.`,
+            });
+          }
+        }
+      }
+
+      // Unindented return statement (outside function)
+      if (trimmed.startsWith("return") && currentIndent === 0 && !insideDef) {
+        issues.push({
+          severity: "error",
+          line: lineIndex,
+          title: "SyntaxError: 'return' outside function",
+          message: `Line ${lineIndex} has an unindented 'return'. In Python, return statements can only appear inside function definitions ('def').`,
+          suggestion: "Wrap this code inside a function definition, or assign the value to a variable.",
+        });
+      }
+
+      // String + non-string concatenation: print("Result: " + add(2, 3)) or "Count: " + count
+      const strConcatMatch = lineText.match(/(["'][^"']*["']\s*\+\s*([a-zA-Z_]\w*\s*\([^)]*\)|\d+|[a-zA-Z_]\w*)|([a-zA-Z_]\w*\s*\([^)]*\)|\d+)\s*\+\s*["'][^"']*["'])/);
+      if (strConcatMatch && !trimmed.startsWith("#")) {
+        const isStringBothSides = /["'][^"']*["']\s*\+\s*["'][^"']*["']/.test(strConcatMatch[0]);
+        if (!isStringBothSides) {
+          const operand = strConcatMatch[2] || strConcatMatch[3];
+          issues.push({
+            severity: "error",
+            line: lineIndex,
+            title: "TypeError: unsupported operand type for +: 'str' and non-str",
+            message: `Line ${lineIndex} concatenates a string with '${operand}' using '+'. In Python, strings cannot be concatenated with numbers or function returns without explicit conversion.`,
+            suggestion: `Use an f-string: f"...{${operand}}..." or wrap the value in str(${operand}).`,
+          });
+        }
+      }
+
       // Python 2 print statement (print "text" instead of print("text"))
       const printNoParens = trimmed.match(/^print\s+(["'].+["']|\w+.*)$/);
       if (printNoParens && !trimmed.startsWith("print(") && !trimmed.startsWith("print (")) {
@@ -186,6 +244,62 @@ export function reviewCode(language: string, code: string): ReviewResult {
           title: "Missing parentheses in print call",
           message: `Line ${lineIndex} uses 'print ...' without parentheses. In Python 3, print is a function and requires parentheses: print(...).`,
           suggestion: `Change 'print ${printNoParens[1]}' to 'print(${printNoParens[1]})'.`,
+        });
+      }
+
+      // Logical operators: &&, ||, !
+      if (/\b(&&|\|\|)\b/.test(lineText) && !trimmed.startsWith("#")) {
+        issues.push({
+          severity: "error",
+          line: lineIndex,
+          title: "SyntaxError: invalid boolean operator",
+          message: `Line ${lineIndex} uses '${lineText.includes("&&") ? "&&" : "||"}'. Python uses 'and' and 'or' for logical operations.`,
+          suggestion: `Replace '${lineText.includes("&&") ? "&&" : "||"}' with '${lineText.includes("&&") ? "and" : "or"}'.`,
+        });
+      }
+      if (/\s+!\s*(\w+|\()/.test(lineText) && !trimmed.startsWith("#") && !/!=/.test(lineText)) {
+        issues.push({
+          severity: "error",
+          line: lineIndex,
+          title: "SyntaxError: invalid '!' operator",
+          message: `Line ${lineIndex} uses '!' for logical negation. Python uses the 'not' keyword.`,
+          suggestion: "Replace '!' with 'not '.",
+        });
+      }
+
+      // Increment/decrement operators ++ or --
+      if (/\b([a-zA-Z_]\w*)\s*(\+\+|--)/.test(lineText) && !trimmed.startsWith("#")) {
+        const m = lineText.match(/\b([a-zA-Z_]\w*)\s*(\+\+|--)/)!;
+        issues.push({
+          severity: "error",
+          line: lineIndex,
+          title: `SyntaxError: unsupported '${m[2]}' operator`,
+          message: `Python does not have '${m[2]}' operators.`,
+          suggestion: `Use '${m[1]} ${m[2] === "++" ? "+=" : "-="} 1' instead.`,
+        });
+      }
+
+      // List .push() instead of .append()
+      if (/\b([a-zA-Z_]\w*)\.push\s*\(/.test(lineText) && !trimmed.startsWith("#")) {
+        const m = lineText.match(/\b([a-zA-Z_]\w*)\.push\s*\(/)!;
+        issues.push({
+          severity: "error",
+          line: lineIndex,
+          title: "AttributeError: 'list' object has no attribute 'push'",
+          message: `Line ${lineIndex} calls '.push()'. In Python, lists use '.append()' to add elements.`,
+          suggestion: `Change '${m[1]}.push(...)' to '${m[1]}.append(...)'.`,
+        });
+      }
+
+      // .length instead of len()
+      if (/\b([a-zA-Z_]\w*)\.(length|size\(\))(?!\w)/.test(lineText) && !trimmed.startsWith("#")) {
+        const m = lineText.match(/\b([a-zA-Z_]\w*)\.(length|size\(\))/)!;
+        issues.push({
+          severity: "error",
+          line: lineIndex,
+          title: `AttributeError: object has no attribute '${m[2]}'`,
+          message: `Line ${lineIndex} accesses '.${m[2]}'. In Python, use the built-in len() function.`,
+          suggestion: `Change '${m[1]}.${m[2]}' to 'len(${m[1]})'.`,
         });
       }
 
@@ -277,17 +391,55 @@ export function reviewCode(language: string, code: string): ReviewResult {
 
     // Auto-fix Python syntax issues
     fixed = fixed.replace(/^(\s*(?:def\s+\w+\s*\(.*?\)|class\s+\w+|if\b.+|elif\b.+|else|for\b.+|while\b.+|try|except\b.*?|finally|with\b.+))(?<!:)$/gm, "$1:");
+    
+    // Auto-fix Python indentation: indent lines after compound statements if unindented
+    const fixedLines = fixed.split("\n");
+    let needsIndent = false;
+    let baseIndent = 0;
+    let indentedInBlock = 0;
+    for (let k = 0; k < fixedLines.length; k++) {
+      const l = fixedLines[k];
+      const trimL = l.trim();
+      const indentL = l.match(/^\s*/)?.[0].length ?? 0;
+      if (needsIndent) {
+        if (trimL === "") {
+          if (indentedInBlock > 0) needsIndent = false;
+          continue;
+        }
+        if (indentL <= baseIndent && !trimL.match(/^(?:def|class|if|elif|else|for|while|try|except|finally|with)\b/)) {
+          fixedLines[k] = "    " + l;
+          indentedInBlock++;
+        } else {
+          needsIndent = false;
+        }
+      }
+      if (trimL.match(/^(?:def\s+\w+\s*\(.*?\)|class\s+\w+|if\b.+|elif\b.+|else|for\b.+|while\b.+|try|except\b.*?|finally|with\b.+):$/)) {
+        needsIndent = true;
+        baseIndent = indentL;
+        indentedInBlock = 0;
+      }
+    }
+    fixed = fixedLines.join("\n");
+
+    // Auto-fix string concatenation with f-string or str()
+    fixed = fixed.replace(/print\(\s*(["'])(.+?)\1\s*\+\s*([a-zA-Z_]\w*\s*\([^)]*\)|\d+|[a-zA-Z_]\w*)\s*\)/g, "print(f$1$2{$3}$1)");
+    fixed = fixed.replace(/(["'])(.+?)\1\s*\+\s*([a-zA-Z_]\w*\s*\([^)]*\)|\d+)/g, "f$1$2{$3}$1");
     fixed = fixed.replace(/^(\s*)print\s+(["'].+["']|\w+.*)$/gm, "$1print($2)");
     fixed = fixed.replace(/\btrue\b/g, "True").replace(/\bfalse\b/g, "False").replace(/\bnull\b/g, "None");
     fixed = fixed.replace(/^\s*function\s+(\w+)\s*\(/gm, "def $1(");
     fixed = fixed.replace(/(\b(?:if|elif|while)\s+[^:=><\n]+)\s*=\s*([^:=><\n]+:?)/g, "$1 == $2");
+    fixed = fixed.replace(/\b(&&)\b/g, "and").replace(/\b(\|\|)\b/g, "or");
+    fixed = fixed.replace(/(\s+)!([a-zA-Z_]\w*|\()/g, "$1not $2");
+    fixed = fixed.replace(/\b([a-zA-Z_]\w*)\s*\+\+/g, "$1 += 1");
+    fixed = fixed.replace(/\b([a-zA-Z_]\w*)\s*--/g, "$1 -= 1");
+    fixed = fixed.replace(/\.push\s*\(/g, ".append(");
+    fixed = fixed.replace(/\b([a-zA-Z_]\w*)\.(?:length|size\(\))/g, "len($1)");
   }
 
   // =========================================================================
   // 4. JAVASCRIPT / TYPESCRIPT DEEP ANALYSIS & CORRECTIONS
   // =========================================================================
   if (/(javascript|typescript)/.test(lower)) {
-    // Missing let/const/var on assignments
     lines.forEach((lineText, idx) => {
       const lineIndex = idx + 1;
       const trimmed = lineText.trim();
@@ -311,6 +463,59 @@ export function reviewCode(language: string, code: string): ReviewResult {
           title: "Legacy 'var' declaration",
           message: `Line ${lineIndex} uses 'var', which has function scope and can leak variables.`,
           suggestion: "Use 'let' for mutable variables or 'const' for immutable values.",
+        });
+      }
+
+      // .length() called as function
+      if (/\b([a-zA-Z_]\w*)\.length\s*\(\)/.test(lineText)) {
+        issues.push({
+          severity: "error",
+          line: lineIndex,
+          title: "TypeError: .length is not a function",
+          message: `Line ${lineIndex} calls '.length()'. In JavaScript, length is a property, not a method.`,
+          suggestion: "Remove the parentheses '()' and use '.length'.",
+        });
+      }
+
+      // .push_back or .append
+      if (/\b([a-zA-Z_]\w*)\.(push_back|append)\s*\(/.test(lineText)) {
+        const m = lineText.match(/\b([a-zA-Z_]\w*)\.(push_back|append)\s*\(/)!;
+        issues.push({
+          severity: "error",
+          line: lineIndex,
+          title: `Invalid array method '.${m[2]}()'`,
+          message: `Line ${lineIndex} calls '.${m[2]}()'. In JavaScript, arrays use '.push()' to append elements.`,
+          suggestion: `Replace '.${m[2]}()' with '.push()'.`,
+        });
+      }
+
+      // Python keywords in JS
+      if (/^\s*def\s+(\w+)\s*\(/.test(lineText)) {
+        issues.push({
+          severity: "error",
+          line: lineIndex,
+          title: "Python 'def' keyword in JavaScript",
+          message: `Line ${lineIndex} uses 'def'. JavaScript functions use the 'function' keyword or arrow functions.`,
+          suggestion: "Change 'def' to 'function'.",
+        });
+      }
+      if (/\belif\b/.test(lineText)) {
+        issues.push({
+          severity: "error",
+          line: lineIndex,
+          title: "Python 'elif' keyword in JavaScript",
+          message: `Line ${lineIndex} uses 'elif'. JavaScript uses 'else if'.`,
+          suggestion: "Change 'elif' to 'else if'.",
+        });
+      }
+      if (/\b(None|True|False)\b/.test(lineText) && !/["'].*["']/.test(lineText)) {
+        const m = lineText.match(/\b(None|True|False)\b/)![1];
+        issues.push({
+          severity: "error",
+          line: lineIndex,
+          title: `Python literal '${m}' in JavaScript`,
+          message: `Line ${lineIndex} uses '${m}'. In JavaScript, use '${m === "None" ? "null" : m.toLowerCase()}'.`,
+          suggestion: `Change '${m}' to '${m === "None" ? "null" : m.toLowerCase()}'.`,
         });
       }
 
@@ -351,6 +556,11 @@ export function reviewCode(language: string, code: string): ReviewResult {
     // Auto-fix JS/TS
     fixed = fixed.replace(/([^!=])==([^=])/g, "$1===$2");
     fixed = fixed.replace(/\bvar\s+/g, "let ");
+    fixed = fixed.replace(/\b([a-zA-Z_]\w*)\.length\s*\(\)/g, "$1.length");
+    fixed = fixed.replace(/\.(push_back|append)\s*\(/g, ".push(");
+    fixed = fixed.replace(/^\s*def\s+(\w+)\s*\(/gm, "function $1(");
+    fixed = fixed.replace(/\belif\b/g, "else if");
+    fixed = fixed.replace(/\bNone\b/g, "null").replace(/\bTrue\b/g, "true").replace(/\bFalse\b/g, "false");
     fixed = fixed.replace(/^\s*console\.log\(.*\);?\s*$/gm, "// removed debugging console.log");
   }
 

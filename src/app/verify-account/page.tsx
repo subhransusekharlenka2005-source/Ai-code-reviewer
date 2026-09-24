@@ -10,10 +10,13 @@ function VerifyAccountForm() {
   const router = useRouter();
   const params = useSearchParams();
   const initialEmail = params.get("email") || "";
+  const justSent = params.get("sent") === "1";
   const [email, setEmail] = useState(initialEmail);
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(
+    justSent && initialEmail ? `A 6-digit verification code was sent to ${initialEmail}. Please check your inbox or spam folder.` : null
+  );
   const [loading, setLoading] = useState(false);
 
   async function verify(e: React.FormEvent) {
@@ -29,7 +32,7 @@ function VerifyAccountForm() {
       return;
     }
 
-    router.push("/dashboard");
+    router.push(`/login?verified=1&email=${encodeURIComponent(email)}`);
     router.refresh();
   }
 

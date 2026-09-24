@@ -56,36 +56,21 @@ export async function POST(req: NextRequest) {
       try {
         await sendMail(email, "Your AI Code Reviewer verification code", otpEmailHtml(code));
         return NextResponse.json({ ok: true, email });
-      } catch {
-        // If SMTP is unconfigured or blocked in cloud hosting, auto-verify user so they are never blocked!
-        console.warn("SMTP email delivery failed or unconfigured, auto-verifying user account");
-        const user = await prisma.user.create({
-          data: {
-            username,
-            email,
-            passwordHash: await hashPassword(password),
-            emailVerified: true,
-          },
-        });
-        await createSession(user.id, user);
-        return NextResponse.json({ ok: true, autoLogin: true });
+      } catch (mailError: any) {
+        console.error("Failed to send OTP email:", mailError);
+        return NextResponse.json({
+          error: "Could not send verification email. Please check your email address and SMTP configuration.",
+        }, { status: 502 });
       }
     } catch {
       dbConnected = false;
     }
 
     if (!dbConnected) {
-      // Automatic fallback for hosting environments (e.g. Vercel) without Postgres:
-      // Instantly creates signed session and logs the user in!
-      const fallbackUser = {
-        id: "usr-" + Date.now(),
-        username,
-        email,
-        displayName: username,
-        role: "USER" as const,
-      };
-      await createSession(fallbackUser.id, fallbackUser);
-      return NextResponse.json({ ok: true, autoLogin: true });
+      // In case database is temporarily disconnected
+      return NextResponse.json({
+        error: "Database is currently connecting. Please try again in a few moments.",
+      }, { status: 503 });
     }
   } catch (err: any) {
     console.error("Registration error:", err);

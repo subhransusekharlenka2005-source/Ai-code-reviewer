@@ -4,8 +4,8 @@ export const registerSchema = z.object({
   username: z.string().trim().min(3).max(32).regex(/^[a-zA-Z0-9_]+$/, "Only letters, numbers and underscores are allowed"),
   email: z.string().trim().toLowerCase().email(),
   password: z.string().min(8).max(128),
-  confirmPassword: z.string(),
-}).refine((data) => data.password === data.confirmPassword, {
+  confirmPassword: z.string().optional(),
+}).refine((data) => !data.confirmPassword || data.password === data.confirmPassword, {
   message: "Passwords do not match",
   path: ["confirmPassword"],
 });

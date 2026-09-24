@@ -33,6 +33,26 @@ export async function POST(req: NextRequest) {
     try {
       result = await aiReviewCode(parsed.data.language, parsed.data.code);
       provider = "gemini";
+
+      // If deterministic analyzer found syntax or indentation errors, ensure they are included
+      const staticCheck = reviewCode(parsed.data.language, parsed.data.code);
+      if (staticCheck.issues.length > 0) {
+        if (result.issues.length === 0) {
+          result = staticCheck;
+        } else {
+          for (const staticIssue of staticCheck.issues) {
+            const alreadyReported = result.issues.some(
+              (i) => (i.line && staticIssue.line && i.line === staticIssue.line) ||
+                     i.title.toLowerCase() === staticIssue.title.toLowerCase()
+            );
+            if (!alreadyReported) {
+              result.issues.push(staticIssue);
+              result.issueCounts[staticIssue.severity] = (result.issueCounts[staticIssue.severity] || 0) + 1;
+              result.score = Math.max(0, result.score - (staticIssue.severity === "error" ? 25 : 10));
+            }
+          }
+        }
+      }
     } catch (error) {
       // Gracefully fall back so reviews NEVER fail
       provider = "local";
@@ -41,16 +61,20 @@ export async function POST(req: NextRequest) {
   }
 
   if (user) {
-    await prisma.codeReview.create({
-      data: {
-        userId: user.id,
-        language: parsed.data.language,
-        originalCode: parsed.data.code,
-        reviewResult: JSON.parse(JSON.stringify({ ...result, provider })),
-        fixedCode: result.fixedCode,
-        score: result.score,
-      },
-    });
+    try {
+      await prisma.codeReview.create({
+        data: {
+          userId: user.id,
+          language: parsed.data.language,
+          originalCode: parsed.data.code,
+          reviewResult: JSON.parse(JSON.stringify({ ...result, provider })),
+          fixedCode: result.fixedCode,
+          score: result.score,
+        },
+      });
+    } catch (saveError) {
+      console.warn("Could not save review to database history:", saveError);
+    }
   }
 
   return NextResponse.json({ ...result, provider });

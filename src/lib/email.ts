@@ -56,7 +56,7 @@ export async function sendMail(
 
   try {
     await transporter.sendMail({
-      from: EMAIL_FROM || "AI Code Reviewer <no-reply@example.com>",
+      from: EMAIL_FROM || (SMTP_USER ? `AI Code Reviewer <${SMTP_USER}>` : "AI Code Reviewer <no-reply@example.com>"),
       to,
       subject,
       html,
@@ -76,10 +76,27 @@ export async function sendMail(
 }
 
 export function otpEmailHtml(code: string) {
-  return `<p>Your AI Code Reviewer verification code is:</p>
-  <p style="font-size:28px;font-weight:bold;letter-spacing:6px">${code}</p>
-  <p>This code expires in 10 minutes and can only be used a limited number of times.</p>
-  <p>If you did not request this, you can ignore this email.</p>`;
+  return `
+  <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 28px; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px;">
+    <div style="margin-bottom: 24px;">
+      <h2 style="margin: 0 0 8px 0; color: #111827; font-size: 20px; font-weight: 700;">AI Code Reviewer</h2>
+      <p style="margin: 0; color: #4b5563; font-size: 14px;">Email Verification Code</p>
+    </div>
+    <p style="color: #374151; font-size: 15px; line-height: 1.5; margin-bottom: 20px;">
+      Please use the 6-digit verification code below to confirm your email and complete your account setup:
+    </p>
+    <div style="background-color: #f3f4f6; border-radius: 8px; padding: 18px; text-align: center; margin: 24px 0;">
+      <span style="font-family: monospace; font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #111827;">${code}</span>
+    </div>
+    <p style="color: #6b7280; font-size: 13px; line-height: 1.5; margin-bottom: 12px;">
+      • This code is valid for <strong>10 minutes</strong>.<br>
+      • After entering this code on the verification page, you can log in to your account.
+    </p>
+    <p style="color: #9ca3af; font-size: 12px; margin-top: 24px; border-top: 1px solid #e5e7eb; padding-top: 16px;">
+      If you did not request this verification code, please ignore this email.
+    </p>
+  </div>
+  `;
 }
 
 export function emailChangeOtpHtml(code: string, newEmail: string) {

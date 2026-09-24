@@ -16,8 +16,8 @@ import FixedCodeViewer from "@/components/reviewer/FixedCodeViewer";
 
 export default function ReviewerPage() {
   const [language, setLanguage] = useState("HTML");
-  const [selectedModelId, setSelectedModelId] = useState("built-in-local");
-  const [selectedProvider, setSelectedProvider] = useState<"local" | "ollama" | "gemini" | "auto">("local");
+  const [selectedModelId, setSelectedModelId] = useState("gemini-flash");
+  const [selectedProvider, setSelectedProvider] = useState<"local" | "ollama" | "gemini" | "auto">("auto");
   const [code, setCode] = useState("");
   const [fixedCode, setFixedCode] = useState("");
   const [issues, setIssues] = useState<ReviewIssue[]>([]);

@@ -62,13 +62,19 @@ export async function aiReviewCode(language: string, code: string): Promise<AIRe
   if (!apiKey) throw new Error("GEMINI_API_KEY is not configured on the server.");
 
   const model = process.env.GEMINI_MODEL?.trim() || "gemini-3.8-flash";
-  const prompt = `You are an expert software engineer and code reviewer.
-Analyze the user's ${language} code deeply. Detect syntax errors, runtime errors, type errors, logic bugs, incorrect API usage, security problems, performance problems, bad error handling, and important maintainability issues. Do not invent issues. Use the supplied language only.
+  const prompt = `You are an expert software engineer and rigorous code reviewer.
+Analyze the user's ${language} code with extreme precision.
+Detect ALL:
+1. Syntax and Indentation errors (e.g. Python indentation issues in functions or blocks, missing colons, unclosed brackets/quotes).
+2. Runtime and Type errors (e.g. Python TypeError when concatenating string with non-string using '+', calling non-existent methods like .push() or .length on Python lists, or .push_back() in JS).
+3. Logic bugs, undefined variables, and broken control flow.
+4. Security vulnerabilities and performance flaws.
 
-For every real issue, provide the best available line number (1-based), severity, title, clear explanation, and a concrete correction suggestion.
-Then produce a corrected version of the COMPLETE code. Preserve the user's intended behavior and do not remove working functionality just to silence a warning. If the code is already correct, return the original code unchanged.
-
-Return JSON only using the requested schema.
+CRITICAL RULES:
+- For EVERY issue, provide the line number (1-based), severity ("error", "warning", or "info"), title, clear explanation, and a concrete suggestion.
+- Every defect that prevents the code from running or causes an exception (such as IndentationError or TypeError) MUST be included in the 'issues' array with severity 'error'.
+- Produce a fully corrected, working version of the COMPLETE code in 'fixedCode'.
+- Deduct score according to issue severity (errors: -25 each, warnings: -10 each).
 
 LANGUAGE:
 ${language}
@@ -100,37 +106,62 @@ ${code}`;
     required: ["summary", "issues", "score", "fixedCode"],
   };
 
-  const response = await fetch(`${GEMINI_API_URL}/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature: 0.1,
-        responseMimeType: "application/json",
-        responseSchema: schema,
-      },
-    }),
-    cache: "no-store",
-  });
+  const candidateModels = [
+    "gemini-flash-lite-latest",
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
+    "gemini-3.6-flash",
+    process.env.GEMINI_MODEL,
+    "gemini-flash-latest",
+    "gemini-3.5-flash",
+    "gemini-3.7-flash",
+    "gemini-3.8-flash",
+    "gemma-4-26b-a4b-it",
+  ].filter(Boolean) as string[];
 
-  const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    const detail = data?.error?.message || `Gemini API returned HTTP ${response.status}`;
-    throw new Error(detail);
+  // Remove duplicates
+  const uniqueModels = Array.from(new Set(candidateModels));
+  let lastError = "All Gemini models unavailable.";
+
+  for (const model of uniqueModels) {
+    try {
+      const response = await fetch(`${GEMINI_API_URL}/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.1,
+            responseMimeType: "application/json",
+            responseSchema: schema,
+          },
+        }),
+        cache: "no-store",
+      });
+
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        lastError = data?.error?.message || `Gemini API model ${model} returned HTTP ${response.status}`;
+        continue;
+      }
+
+      const text = extractText(data);
+      if (!text) continue;
+
+      let parsed: any;
+      try {
+        parsed = JSON.parse(text);
+        return normalizeResult(parsed, code);
+      } catch {
+        continue;
+      }
+    } catch (err: any) {
+      lastError = err?.message || String(err);
+      continue;
+    }
   }
 
-  const text = extractText(data);
-  if (!text) throw new Error("Gemini returned an empty response.");
-
-  let parsed: any;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    throw new Error("Gemini returned invalid structured output.");
-  }
-
-  return normalizeResult(parsed, code);
+  throw new Error(lastError);
 }
 
 export async function aiFixCode(language: string, code: string): Promise<string> {

@@ -9,7 +9,8 @@ import { loginApi } from "@/services/authService";
 function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
-  const [form, setForm] = useState({ identifier: "", password: "" });
+  const emailParam = params.get("email") || "";
+  const [form, setForm] = useState({ identifier: emailParam, password: "" });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -37,7 +38,9 @@ function LoginForm() {
       <h1 className="font-display text-2xl font-semibold mb-6">Log in</h1>
       <form onSubmit={onSubmit} className="card p-6 space-y-4">
         {verified && (
-          <p className="text-sm text-good">Your email is verified — you can log in now.</p>
+          <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-md text-sm text-emerald-700 dark:text-emerald-300 font-medium">
+            ✓ Email verified successfully! Please enter your password to log in.
+          </div>
         )}
         <div>
           <label className="label">Username or email</label>
