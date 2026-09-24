@@ -2,6 +2,7 @@ export type AuthResult = {
   ok: boolean;
   error?: string;
   message?: string;
+  autoLogin?: boolean;
 };
 
 export async function loginApi(credentials: { identifier: string; password: string }): Promise<AuthResult> {
@@ -37,7 +38,7 @@ export async function registerApi(formData: {
     if (!res.ok) {
       return { ok: false, error: data?.error || "Registration failed." };
     }
-    return { ok: true };
+    return { ok: true, autoLogin: data?.autoLogin };
   } catch (err: any) {
     return { ok: false, error: err?.message || "Could not reach the server." };
   }

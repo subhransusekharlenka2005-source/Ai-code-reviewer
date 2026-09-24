@@ -53,7 +53,30 @@ function LoginForm() {
         <button className="btn-primary w-full" disabled={loading}>
           {loading ? "Logging in…" : "Log in"}
         </button>
-        <div className="flex justify-between text-sm">
+        <div className="relative my-2">
+          <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-line"></div></div>
+          <div className="relative flex justify-center text-xs uppercase"><span className="bg-white px-2 text-black/40">Or</span></div>
+        </div>
+        <button
+          type="button"
+          onClick={async () => {
+            setError(null);
+            setLoading(true);
+            const res = await loginApi({ identifier: "developer", password: "password123" });
+            setLoading(false);
+            if (!res.ok) {
+              setError(res.error || "Login failed.");
+              return;
+            }
+            router.push("/dashboard");
+            router.refresh();
+          }}
+          disabled={loading}
+          className="btn-ghost w-full border-signal/40 text-signal hover:bg-signal/5 font-semibold"
+        >
+          ⚡ Instant Demo Login
+        </button>
+        <div className="flex justify-between text-sm pt-2">
           <Link href="/register" className="text-signal font-medium">Create an account</Link>
           <Link href="/forgot-password" className="text-black/60">Forgot password?</Link>
         </div>

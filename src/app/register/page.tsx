@@ -26,6 +26,12 @@ export default function RegisterPage() {
       return;
     }
 
+    if (res.autoLogin) {
+      router.push("/dashboard");
+      router.refresh();
+      return;
+    }
+
     setSent(true);
   }
 
