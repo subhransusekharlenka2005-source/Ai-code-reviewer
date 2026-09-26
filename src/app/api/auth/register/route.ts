@@ -18,7 +18,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { username, email, password } = parsed.data;
+    const email = parsed.data.email.trim().toLowerCase();
+    const username = parsed.data.username.trim();
+    const { password } = parsed.data;
 
     // Check if username or email already exists in authoritative database
     const existing = await dbCheckUserExists(username, email);

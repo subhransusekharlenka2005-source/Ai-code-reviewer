@@ -13,32 +13,71 @@ interface SendSmtpOptions {
   html: string;
 }
 
+function createSmtpStream(socket: net.Socket | tls.TLSSocket) {
+  let buffer = "";
+  let onLineCallback: ((line: string) => void) | null = null;
+  const queue: string[] = [];
+
+  socket.on("data", (chunk: Buffer) => {
+    buffer += chunk.toString("utf8");
+    let newlineIndex: number;
+    while ((newlineIndex = buffer.indexOf("\r\n")) !== -1) {
+      const line = buffer.slice(0, newlineIndex);
+      buffer = buffer.slice(newlineIndex + 2);
+      if (onLineCallback) {
+        const cb = onLineCallback;
+        onLineCallback = null;
+        cb(line);
+      } else {
+        queue.push(line);
+      }
+    }
+  });
+
+  async function readLine(): Promise<string> {
+    if (queue.length > 0) {
+      return queue.shift()!;
+    }
+    return new Promise((resolve) => {
+      onLineCallback = resolve;
+    });
+  }
+
+  async function readResponse(): Promise<{ code: number; lines: string[]; text: string }> {
+    const lines: string[] = [];
+    while (true) {
+      const line = await readLine();
+      lines.push(line);
+      if (/^\d{3} /.test(line) || /^\d{3}$/.test(line)) {
+        const code = parseInt(line.slice(0, 3), 10);
+        return { code, lines, text: lines.join("\n") };
+      }
+    }
+  }
+
+  return { readResponse };
+}
+
 /**
  * Direct, robust SMTP engine over STARTTLS that avoids middlebox TLS packet inspection resets.
  * Directly negotiates with Google Gmail SMTP servers and authenticates securely.
  */
-function deliverSmtpMessage(options: SendSmtpOptions): Promise<{ ok: boolean; response: string }> {
-  return new Promise((resolve, reject) => {
-    const { host, port, user, pass, from, replyTo, to, subject, html } = options;
-    const normalizedPassword = pass ? pass.replace(/\s+/g, "") : "";
-    const userB64 = Buffer.from(user).toString("base64");
-    const passB64 = Buffer.from(normalizedPassword).toString("base64");
+async function deliverSmtpMessage(options: SendSmtpOptions): Promise<{ ok: boolean; response: string }> {
+  const { host, port, user, pass, replyTo, to, subject, html } = options;
+  const cleanUser = user.trim().toLowerCase();
+  const cleanTo = to.trim().toLowerCase();
+  const normalizedPassword = pass ? pass.replace(/\s+/g, "") : "";
+  const userB64 = Buffer.from(cleanUser).toString("base64");
+  const passB64 = Buffer.from(normalizedPassword).toString("base64");
 
-    const socket = net.connect(port || 587, host || "smtp.gmail.com");
-    socket.setTimeout(20000);
+  const socket = net.connect(port || 587, host || "smtp.gmail.com");
+  socket.setTimeout(25000);
 
-    let step = 0;
-    let tlsSocket: tls.TLSSocket | null = null;
+  const cleanup = () => {
+    try { socket.destroy(); } catch {}
+  };
 
-    const cleanup = () => {
-      try {
-        socket.destroy();
-      } catch {}
-      try {
-        if (tlsSocket) tlsSocket.destroy();
-      } catch {}
-    };
-
+  return new Promise(async (resolve, reject) => {
     socket.on("timeout", () => {
       cleanup();
       reject(new Error("SMTP connection timed out"));
@@ -49,97 +88,116 @@ function deliverSmtpMessage(options: SendSmtpOptions): Promise<{ ok: boolean; re
       reject(new Error(`SMTP connection failed: ${err.message}`));
     });
 
-    socket.on("data", (data) => {
-      const str = data.toString();
+    try {
+      const initialStream = createSmtpStream(socket);
 
-      if (step === 0 && str.startsWith("220")) {
-        step = 1;
-        socket.write("EHLO localhost\r\n");
-      } else if (step === 1 && str.startsWith("250")) {
-        step = 2;
-        socket.write("STARTTLS\r\n");
-      } else if (step === 2 && str.startsWith("220")) {
-        step = 3;
-        socket.removeAllListeners("data");
-        socket.removeAllListeners("error");
-        socket.removeAllListeners("timeout");
+      // 1. Initial 220 banner
+      const greeting = await initialStream.readResponse();
+      if (greeting.code !== 220) throw new Error("Greeting failed: " + greeting.text);
 
-        tlsSocket = tls.connect(
-          {
-            socket,
-            servername: undefined, // Intentionally undefined to prevent middlebox TLS handshake resets
-            rejectUnauthorized: false,
-          },
-          () => {
-            tlsSocket?.write("EHLO localhost\r\n");
-          }
-        );
+      // 2. EHLO
+      socket.write("EHLO localhost\r\n");
+      const ehlo1 = await initialStream.readResponse();
+      if (ehlo1.code !== 250) throw new Error("EHLO failed: " + ehlo1.text);
 
-        tlsSocket.setTimeout(20000);
+      // 3. STARTTLS
+      socket.write("STARTTLS\r\n");
+      const starttls = await initialStream.readResponse();
+      if (starttls.code !== 220) throw new Error("STARTTLS failed: " + starttls.text);
 
-        tlsSocket.on("timeout", () => {
-          cleanup();
-          reject(new Error("Secure SMTP connection timed out"));
-        });
+      // Remove raw socket listener before upgrading
+      socket.removeAllListeners("data");
 
-        tlsSocket.on("error", (err) => {
-          cleanup();
-          reject(new Error(`Secure SMTP TLS error: ${err.message}`));
-        });
+      // 4. Upgrade socket to TLS without SNI
+      const tlsSocket = tls.connect({
+        socket,
+        servername: undefined,
+        rejectUnauthorized: false,
+      });
 
-        let tlsStep = 0;
-        tlsSocket.on("data", (d) => {
-          const resp = d.toString();
+      await new Promise<void>((resTls, rejTls) => {
+        tlsSocket.once("secureConnect", () => resTls());
+        tlsSocket.once("error", rejTls);
+      });
 
-          if (tlsStep === 0 && resp.startsWith("250")) {
-            tlsStep = 1;
-            tlsSocket?.write("AUTH LOGIN\r\n");
-          } else if (tlsStep === 1 && resp.startsWith("334")) {
-            tlsStep = 2;
-            tlsSocket?.write(userB64 + "\r\n");
-          } else if (tlsStep === 2 && resp.startsWith("334")) {
-            tlsStep = 3;
-            tlsSocket?.write(passB64 + "\r\n");
-          } else if (tlsStep === 3 && resp.startsWith("235")) {
-            tlsStep = 4;
-            tlsSocket?.write(`MAIL FROM:<${user}>\r\n`);
-          } else if (tlsStep === 4 && resp.startsWith("250")) {
-            tlsStep = 5;
-            tlsSocket?.write(`RCPT TO:<${to}>\r\n`);
-          } else if (tlsStep === 5 && resp.startsWith("250")) {
-            tlsStep = 6;
-            tlsSocket?.write("DATA\r\n");
-          } else if (tlsStep === 6 && resp.startsWith("354")) {
-            tlsStep = 7;
-            const messageId = `<${Date.now()}.${Math.random().toString(36).slice(2)}@gmail.com>`;
-            const headerLines = [
-              `From: ${from}`,
-              `To: ${to}`,
-              replyTo ? `Reply-To: ${replyTo}` : "",
-              `Subject: ${subject}`,
-              `Message-ID: ${messageId}`,
-              `Date: ${new Date().toUTCString()}`,
-              `MIME-Version: 1.0`,
-              `Content-Type: text/html; charset=utf-8`,
-              `Content-Transfer-Encoding: 8bit`,
-            ].filter(Boolean);
+      tlsSocket.setTimeout(25000);
+      tlsSocket.on("timeout", () => {
+        try { tlsSocket.destroy(); } catch {}
+        reject(new Error("Secure SMTP connection timed out"));
+      });
 
-            const emailPayload = headerLines.join("\r\n") + "\r\n\r\n" + html + "\r\n.\r\n";
-            tlsSocket?.write(emailPayload);
-          } else if (tlsStep === 7 && resp.startsWith("250")) {
-            tlsStep = 8;
-            tlsSocket?.write("QUIT\r\n");
-            cleanup();
-            resolve({ ok: true, response: resp.trim() });
-          } else if (tlsStep === 8 && resp.startsWith("221")) {
-            cleanup();
-          } else if (resp.startsWith("4") || resp.startsWith("5")) {
-            cleanup();
-            reject(new Error(`SMTP server rejected message: ${resp.trim()}`));
-          }
-        });
-      }
-    });
+      tlsSocket.on("error", (err) => {
+        try { tlsSocket.destroy(); } catch {}
+        reject(new Error(`Secure SMTP TLS error: ${err.message}`));
+      });
+
+      const tlsStream = createSmtpStream(tlsSocket);
+
+      // 5. EHLO after TLS upgrade
+      tlsSocket.write("EHLO localhost\r\n");
+      const ehlo2 = await tlsStream.readResponse();
+      if (ehlo2.code !== 250) throw new Error("TLS EHLO failed: " + ehlo2.text);
+
+      // 6. AUTH LOGIN
+      tlsSocket.write("AUTH LOGIN\r\n");
+      const auth1 = await tlsStream.readResponse();
+      if (auth1.code !== 334) throw new Error("AUTH LOGIN failed: " + auth1.text);
+
+      // 7. Username
+      tlsSocket.write(userB64 + "\r\n");
+      const auth2 = await tlsStream.readResponse();
+      if (auth2.code !== 334) throw new Error("Username rejected: " + auth2.text);
+
+      // 8. Password
+      tlsSocket.write(passB64 + "\r\n");
+      const auth3 = await tlsStream.readResponse();
+      if (auth3.code !== 235) throw new Error("Authentication failed: " + auth3.text);
+
+      // 9. MAIL FROM
+      tlsSocket.write(`MAIL FROM:<${cleanUser}>\r\n`);
+      const mailFrom = await tlsStream.readResponse();
+      if (mailFrom.code !== 250) throw new Error("MAIL FROM rejected: " + mailFrom.text);
+
+      // 10. RCPT TO
+      tlsSocket.write(`RCPT TO:<${cleanTo}>\r\n`);
+      const rcptTo = await tlsStream.readResponse();
+      if (rcptTo.code !== 250) throw new Error("Recipient rejected: " + rcptTo.text);
+
+      // 11. DATA
+      tlsSocket.write("DATA\r\n");
+      const dataResp = await tlsStream.readResponse();
+      if (dataResp.code !== 354) throw new Error("DATA command rejected: " + dataResp.text);
+
+      // 12. Send Email Body
+      const messageId = `<${Date.now()}.${Math.random().toString(36).slice(2)}@gmail.com>`;
+      const headerLines = [
+        `From: "AI Code Reviewer" <${cleanUser}>`,
+        `To: ${cleanTo}`,
+        replyTo ? `Reply-To: ${replyTo}` : "",
+        `Subject: ${subject}`,
+        `Message-ID: ${messageId}`,
+        `Date: ${new Date().toUTCString()}`,
+        `MIME-Version: 1.0`,
+        `Content-Type: text/html; charset=utf-8`,
+        `Content-Transfer-Encoding: 8bit`,
+      ].filter(Boolean);
+
+      const emailPayload = headerLines.join("\r\n") + "\r\n\r\n" + html + "\r\n.\r\n";
+      tlsSocket.write(emailPayload);
+
+      const doneResp = await tlsStream.readResponse();
+      if (doneResp.code !== 250) throw new Error("Message submission failed: " + doneResp.text);
+
+      try {
+        tlsSocket.write("QUIT\r\n");
+        tlsSocket.destroy();
+      } catch {}
+
+      resolve({ ok: true, response: doneResp.text });
+    } catch (err: any) {
+      cleanup();
+      reject(err);
+    }
   });
 }
 
