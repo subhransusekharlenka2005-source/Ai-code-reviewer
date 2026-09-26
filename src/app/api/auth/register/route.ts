@@ -1,74 +1,76 @@
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import { registerSchema } from "@/lib/validation";
 import { generateOtp } from "@/lib/otp";
 import { sendMail, otpEmailHtml } from "@/lib/email";
-import { saveChallenge } from "@/lib/otp-store";
+import { dbCheckUserExists, dbSaveOtpChallenge } from "@/lib/auth-db";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => null);
     const parsed = registerSchema.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.issues[0]?.message || "Invalid input" }, { status: 400 });
+      return NextResponse.json(
+        { error: parsed.error.issues[0]?.message || "Invalid input" },
+        { status: 400 }
+      );
     }
 
     const { username, email, password } = parsed.data;
 
-    // Check if account already exists in database (if database is connected)
-    try {
-      const existing = await prisma.user.findFirst({
-        where: {
-          OR: [
-            { email: { equals: email, mode: "insensitive" } },
-            { username: { equals: username, mode: "insensitive" } },
-          ],
-        },
-      });
-      if (existing?.emailVerified) {
-        return NextResponse.json({ error: "An account with that email or username already exists." }, { status: 409 });
+    // Check if username or email already exists in authoritative database
+    const existing = await dbCheckUserExists(username, email);
+    if (existing.exists && existing.user?.emailVerified) {
+      if (existing.field === "email") {
+        return NextResponse.json(
+          { error: "An account with this email address already exists." },
+          { status: 409 }
+        );
       }
-      if (existing && !existing.emailVerified) {
-        await prisma.user.delete({ where: { id: existing.id } }).catch(() => null);
-      }
-    } catch {
-      // Database offline or serverless fallback - continue smoothly
+      return NextResponse.json(
+        { error: "This username is already taken. Please choose another." },
+        { status: 409 }
+      );
     }
 
     const code = generateOtp();
     const passwordHash = await hashPassword(password);
 
-    await saveChallenge({
+    // Save pending challenge with 10-minute expiry (single-use, hashed)
+    await dbSaveOtpChallenge({
       email,
       username,
       passwordHash,
       code,
       purpose: "REGISTER",
+      ttlMs: 10 * 60 * 1000,
     });
 
-    let emailSent = true;
+    // Send verification code via authoritative SMTP engine
     try {
-      await sendMail(email, "Your AI Code Reviewer verification code", otpEmailHtml(code));
+      await sendMail(
+        email,
+        "Your AI Code Reviewer verification code",
+        otpEmailHtml(code)
+      );
     } catch (mailError: any) {
-      console.warn("SMTP delivery attempt failed (local/network block):", mailError?.message || mailError);
-      emailSent = false;
+      console.error("SMTP delivery failure:", mailError?.message || mailError);
+      return NextResponse.json(
+        {
+          error:
+            "Could not deliver verification email. Please verify your email address or try again shortly.",
+        },
+        { status: 502 }
+      );
     }
 
-    console.log("\n========================================================");
-    console.log(`[REGISTRATION OTP] Code for ${email} is: >>> ${code} <<<`);
-    console.log("========================================================\n");
-
+    // Never return the OTP code or secret in the response
     return NextResponse.json({
       ok: true,
       email,
-      code,
-      emailSent,
-      message: emailSent
-        ? "A 6-digit verification code was sent to your email."
-        : `Verification code generated: ${code}`,
+      message: "A 6-digit verification code has been sent to your email address.",
     });
   } catch (err: any) {
     console.error("Registration error:", err);

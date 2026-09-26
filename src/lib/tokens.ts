@@ -1,19 +1,15 @@
 import crypto from "crypto";
 import { prisma } from "./db";
+import { dbSavePasswordReset } from "./auth-db";
 
 function randomToken() {
   return crypto.randomBytes(32).toString("hex");
 }
 
-export async function createPasswordResetToken(userId: string) {
-  await prisma.passwordResetToken.deleteMany({ where: { userId } });
+export async function createPasswordResetToken(userId: string, code?: string) {
   const token = randomToken();
-  await prisma.passwordResetToken.create({
-    data: {
-      token,
-      userId,
-      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
-    },
-  });
+  const resetCode = code || Math.floor(100000 + Math.random() * 900000).toString();
+  
+  await dbSavePasswordReset(userId, token, resetCode);
   return token;
 }

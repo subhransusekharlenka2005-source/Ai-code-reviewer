@@ -1,18 +1,23 @@
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
-import crypto from "crypto";
-import { prisma } from "@/lib/db";
-import { verifyPassword, createSession } from "@/lib/auth";
+import { verifyPassword, createSession, attachSessionCookie } from "@/lib/auth";
 import { loginSchema, loginOtpSchema } from "@/lib/validation";
 import { hashOtp, safeEqual } from "@/lib/otp";
-import { findChallenge, incrementChallengeAttempts, deleteChallenge } from "@/lib/otp-store";
+import {
+  dbFindUserByIdentifier,
+  dbFindOtpChallenge,
+  dbIncrementOtpAttempts,
+  dbDeleteOtpChallenge,
+  dbCreateUser,
+  dbMarkEmailVerified,
+} from "@/lib/auth-db";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => null);
 
-    // 1. Check if this is an OTP login request (email + code)
+    // 1. OTP Login Flow (Email + 6-digit Code)
     if (body?.email && body?.code) {
       const parsedOtp = loginOtpSchema.safeParse(body);
       if (!parsedOtp.success) {
@@ -22,10 +27,10 @@ export async function POST(req: NextRequest) {
         );
       }
       const { email, code } = parsedOtp.data;
-      const challenge = await findChallenge(email, "LOGIN");
+      const challenge = await dbFindOtpChallenge(email, "LOGIN");
 
-      if (!challenge || challenge.expiresAt <= new Date()) {
-        if (challenge) await deleteChallenge(challenge);
+      if (!challenge || new Date(challenge.expiresAt) <= new Date()) {
+        if (challenge) await dbDeleteOtpChallenge(email, "LOGIN");
         return NextResponse.json(
           { error: "The login code is invalid or has expired. Please request a new code." },
           { status: 400 }
@@ -33,7 +38,7 @@ export async function POST(req: NextRequest) {
       }
 
       if (challenge.attempts >= 5) {
-        await deleteChallenge(challenge);
+        await dbDeleteOtpChallenge(email, "LOGIN");
         return NextResponse.json(
           { error: "Too many failed attempts. Please request a new code." },
           { status: 429 }
@@ -42,51 +47,44 @@ export async function POST(req: NextRequest) {
 
       const valid = safeEqual(hashOtp(code), challenge.codeHash);
       if (!valid) {
-        await incrementChallengeAttempts(challenge);
+        await dbIncrementOtpAttempts(email, "LOGIN");
         return NextResponse.json(
           { error: "Incorrect verification code. Please check your email and try again." },
           { status: 400 }
         );
       }
 
-      let user: any = null;
-      try {
-        user = await prisma.user.findFirst({
-          where: { email: { equals: email, mode: "insensitive" } },
-        });
+      // Single-use: delete challenge
+      await dbDeleteOtpChallenge(email, "LOGIN");
 
-        if (!user) {
-          user = await prisma.user.create({
-            data: {
-              username: challenge.username || email.split("@")[0],
-              email: challenge.email,
-              passwordHash: "",
-              emailVerified: true,
-            },
-          });
-        } else if (!user.emailVerified) {
-          user = await prisma.user.update({
-            where: { id: user.id },
-            data: { emailVerified: true },
-          });
-        }
-      } catch {
-        user = {
-          id: "usr-" + crypto.randomBytes(8).toString("hex"),
+      // Find or create user
+      let user = await dbFindUserByIdentifier(email);
+      if (!user) {
+        user = await dbCreateUser({
           username: challenge.username || email.split("@")[0],
           email: challenge.email,
-          displayName: challenge.username || email.split("@")[0],
-          role: "USER" as const,
+          passwordHash: "",
           emailVerified: true,
-        };
+        });
+      } else if (!user.emailVerified) {
+        await dbMarkEmailVerified(user.id);
+        user.emailVerified = true;
       }
 
-      await deleteChallenge(challenge);
-      await createSession(user.id, user);
-      return NextResponse.json({ ok: true, user });
+      const session = await createSession(user.id);
+      const response = NextResponse.json({
+        ok: true,
+        user: {
+          id: user.id,
+          email: user.email,
+          username: user.username,
+        },
+      });
+      attachSessionCookie(response, session.token, session.expiresAt);
+      return response;
     }
 
-    // 2. Standard username/email + password login
+    // 2. Standard Password Login Flow (Username/Email + Password)
     const parsed = loginSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
@@ -94,50 +92,45 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
     const { identifier, password } = parsed.data;
-    const emailIdentifier = identifier.toLowerCase();
+    const user = await dbFindUserByIdentifier(identifier);
 
-    let user: any = null;
-    let dbConnected = true;
-
-    try {
-      user = await prisma.user.findFirst({
-        where: { OR: [{ email: emailIdentifier }, { username: identifier }] },
-      });
-    } catch {
-      dbConnected = false;
+    // Generic error message prevents user/account enumeration
+    if (!user) {
+      return NextResponse.json(
+        { error: "Invalid username or password." },
+        { status: 401 }
+      );
     }
 
-    if (dbConnected && user) {
-      const valid = await verifyPassword(password, user.passwordHash);
-      if (!valid) return NextResponse.json({ error: "Incorrect username/email or password." }, { status: 401 });
-
-      if (!user.emailVerified) {
-        return NextResponse.json(
-          { error: "Please verify your email before logging in." },
-          { status: 403 }
-        );
-      }
-
-      await createSession(user.id, user);
-      return NextResponse.json({ ok: true });
+    const validPassword = await verifyPassword(password, user.passwordHash);
+    if (!validPassword) {
+      return NextResponse.json(
+        { error: "Invalid username or password." },
+        { status: 401 }
+      );
     }
 
-    if (!dbConnected) {
-      // Fallback for hosting environments without Postgres
-      const fallbackUser = {
-        id: "usr-" + Buffer.from(identifier).toString("hex").slice(0, 12),
-        username: identifier.includes("@") ? identifier.split("@")[0] : identifier,
-        email: identifier.includes("@") ? identifier : `${identifier}@example.com`,
-        displayName: identifier.includes("@") ? identifier.split("@")[0] : identifier,
-        role: "USER" as const,
-      };
-      await createSession(fallbackUser.id, fallbackUser);
-      return NextResponse.json({ ok: true });
+    if (!user.emailVerified) {
+      return NextResponse.json(
+        { error: "Please verify your email address before logging in." },
+        { status: 403 }
+      );
     }
 
-    // Generic error
-    return NextResponse.json({ error: "Incorrect username/email or password." }, { status: 401 });
+    const session = await createSession(user.id);
+    const response = NextResponse.json({
+      ok: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+      },
+    });
+
+    attachSessionCookie(response, session.token, session.expiresAt);
+    return response;
   } catch (err: any) {
     console.error("Login error:", err);
     return NextResponse.json(

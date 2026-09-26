@@ -1,12 +1,11 @@
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import crypto from "crypto";
 import { forgotPasswordSchema } from "@/lib/validation";
-import { createPasswordResetToken } from "@/lib/tokens";
 import { generateOtp } from "@/lib/otp";
 import { sendMail, passwordResetEmailHtml } from "@/lib/email";
-import { saveChallenge } from "@/lib/otp-store";
+import { dbFindUserByIdentifier, dbSavePasswordReset } from "@/lib/auth-db";
 
 export async function POST(req: NextRequest) {
   try {
@@ -20,32 +19,18 @@ export async function POST(req: NextRequest) {
     }
 
     const { email } = parsed.data;
+    const user = await dbFindUserByIdentifier(email);
 
-    let user: any = null;
-    try {
-      user = await prisma.user.findFirst({
-        where: { email: { equals: email, mode: "insensitive" } },
-      });
-    } catch {
-      // Database offline/connecting
-    }
-
-    // Always return a success-like message for privacy, but dispatch the email if user exists
+    // If user exists, issue reset token and 6-digit code, and send real email
     if (user) {
-      const token = await createPasswordResetToken(user.id);
+      const token = crypto.randomBytes(32).toString("hex");
       const otpCode = generateOtp();
 
-      // Store in resilient challenge store for 1 hour
-      await saveChallenge({
-        email: user.email,
-        username: user.username,
-        passwordHash: token,
-        code: otpCode,
-        purpose: "RESET_PASSWORD",
-        ttlMs: 60 * 60 * 1000,
-      });
+      // Persist reset token + code in authoritative store
+      await dbSavePasswordReset(user.id, token, otpCode);
 
-      const origin = process.env.APP_URL || req.nextUrl.origin || "http://localhost:3000";
+      const origin =
+        process.env.APP_URL || req.nextUrl.origin || "http://localhost:3000";
       const link = `${origin}/reset-password?token=${token}&email=${encodeURIComponent(user.email)}`;
 
       try {
@@ -55,13 +40,15 @@ export async function POST(req: NextRequest) {
           passwordResetEmailHtml(link, otpCode)
         );
       } catch (mailError: any) {
-        console.warn("SMTP send failed during forgot password:", mailError?.message || mailError);
+        console.error("SMTP forgot password email failure:", mailError?.message || mailError);
       }
     }
 
+    // Always return generic privacy-preserving message (prevents account enumeration)
     return NextResponse.json({
       ok: true,
-      message: "If that email is registered, a password reset link and code have been sent.",
+      message:
+        "If that email address is registered, a password reset link and verification code have been sent.",
     });
   } catch (err: any) {
     console.error("Forgot password error:", err);

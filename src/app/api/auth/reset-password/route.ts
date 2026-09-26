@@ -1,11 +1,14 @@
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
 import { hashPassword, destroyAllSessionsForUser } from "@/lib/auth";
 import { resetPasswordSchema } from "@/lib/validation";
-import { hashOtp, safeEqual } from "@/lib/otp";
-import { findChallenge, findChallengeByCode, deleteChallenge } from "@/lib/otp-store";
+import {
+  dbFindPasswordReset,
+  dbDeletePasswordResetsForUser,
+  dbUpdateUserPassword,
+  dbMarkEmailVerified,
+} from "@/lib/auth-db";
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,95 +20,35 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    const { token, password, email } = parsed.data;
+    const { token, password } = parsed.data;
 
-    let targetUserId: string | null = null;
-    let tokenRecordId: string | null = null;
-    let matchedChallenge: any = null;
+    // Look up token or 6-digit code in authoritative store
+    const resetRecord = await dbFindPasswordReset(token);
 
-    // 1. Check if token matches a database passwordResetToken
-    try {
-      const record = await prisma.passwordResetToken.findUnique({
-        where: { token },
-      });
-      if (record) {
-        if (record.expiresAt < new Date()) {
-          await prisma.passwordResetToken.delete({ where: { token } }).catch(() => null);
-          return NextResponse.json(
-            { error: "This reset link has expired. Please request a new one." },
-            { status: 400 }
-          );
-        }
-        targetUserId = record.userId;
-        tokenRecordId = record.id;
+    if (!resetRecord || new Date(resetRecord.expiresAt) <= new Date()) {
+      if (resetRecord) {
+        await dbDeletePasswordResetsForUser(resetRecord.userId);
       }
-    } catch {
-      // Database offline/connecting; fallback to challenge store
-    }
-
-    // 2. If not found by DB token, check if it's a 6-digit OTP code or stored challenge
-    if (!targetUserId) {
-      if (email) {
-        const challenge = await findChallenge(email, "RESET_PASSWORD");
-        if (challenge && challenge.expiresAt > new Date()) {
-          const isTokenMatch = challenge.passwordHash === token;
-          const isCodeMatch = safeEqual(hashOtp(token), challenge.codeHash);
-          if (isTokenMatch || isCodeMatch) {
-            matchedChallenge = challenge;
-          }
-        }
-      }
-
-      if (!matchedChallenge) {
-        matchedChallenge = await findChallengeByCode(token, "RESET_PASSWORD");
-      }
-
-      if (matchedChallenge) {
-        try {
-          const user = await prisma.user.findFirst({
-            where: { email: { equals: matchedChallenge.email, mode: "insensitive" } },
-          });
-          if (user) {
-            targetUserId = user.id;
-          }
-        } catch {
-          // ignore
-        }
-      }
-    }
-
-    if (!targetUserId) {
       return NextResponse.json(
-        { error: "This reset link or OTP code is invalid or has expired. Please request a new one." },
+        { error: "This password reset link or code is invalid or has expired. Please request a new one." },
         { status: 400 }
       );
     }
 
-    // Update password
+    // Update password hash
     const passwordHash = await hashPassword(password);
-    try {
-      await prisma.user.update({
-        where: { id: targetUserId },
-        data: { passwordHash },
-      });
-    } catch {
-      // ignore if db offline
-    }
+    await dbUpdateUserPassword(resetRecord.userId, passwordHash);
+    await dbMarkEmailVerified(resetRecord.userId);
 
-    // Clean up reset token and challenge
-    if (tokenRecordId) {
-      await prisma.passwordResetToken.deleteMany({ where: { token } }).catch(() => null);
-    }
-    if (matchedChallenge) {
-      await deleteChallenge(matchedChallenge);
-    }
+    // Single-use guarantee: Invalidate all reset tokens for this user
+    await dbDeletePasswordResetsForUser(resetRecord.userId);
 
-    // Invalidate all existing sessions
-    await destroyAllSessionsForUser(targetUserId);
+    // Security best practice: Invalidate any existing active sessions
+    await destroyAllSessionsForUser(resetRecord.userId);
 
     return NextResponse.json({
       ok: true,
-      message: "Your password has been successfully reset. You can now log in.",
+      message: "Your password has been reset successfully. Please log in with your new password.",
     });
   } catch (err: any) {
     console.error("Reset password error:", err);

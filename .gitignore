@@ -31,6 +31,7 @@ prisma/dev.db
 prisma/dev.db-journal
 *.sqlite
 *.sqlite3
+.data/
 
 # Operating System & IDE
 .DS_Store

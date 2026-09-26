@@ -1,11 +1,10 @@
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
 import { requestOtpSchema } from "@/lib/validation";
 import { generateOtp } from "@/lib/otp";
 import { sendMail, loginOtpEmailHtml } from "@/lib/email";
-import { saveChallenge } from "@/lib/otp-store";
+import { dbFindUserByIdentifier, dbSaveOtpChallenge } from "@/lib/auth-db";
 
 export async function POST(req: NextRequest) {
   try {
@@ -21,47 +20,41 @@ export async function POST(req: NextRequest) {
     const { email } = parsed.data;
 
     let username = email.split("@")[0];
-    try {
-      const existingUser = await prisma.user.findFirst({
-        where: { email: { equals: email, mode: "insensitive" } },
-      });
-      if (existingUser) {
-        username = existingUser.username;
-      }
-    } catch {
-      // Database offline/connecting
+    const existingUser = await dbFindUserByIdentifier(email);
+    if (existingUser) {
+      username = existingUser.username;
     }
 
     const code = generateOtp();
 
-    await saveChallenge({
+    await dbSaveOtpChallenge({
       email,
       username,
+      passwordHash: existingUser?.passwordHash || "",
       code,
       purpose: "LOGIN",
       ttlMs: 10 * 60 * 1000,
     });
 
-    let emailSent = true;
     try {
-      await sendMail(email, "Your AI Code Reviewer login code", loginOtpEmailHtml(code));
+      await sendMail(
+        email,
+        "Your AI Code Reviewer login code",
+        loginOtpEmailHtml(code)
+      );
     } catch (mailError: any) {
-      console.warn("SMTP send failed during login OTP:", mailError?.message || mailError);
-      emailSent = false;
+      console.error("SMTP login OTP failure:", mailError?.message || mailError);
+      return NextResponse.json(
+        { error: "Could not deliver login code to your email. Please try again in a moment." },
+        { status: 502 }
+      );
     }
 
-    console.log("\n========================================================");
-    console.log(`[LOGIN OTP] Code for ${email} is: >>> ${code} <<<`);
-    console.log("========================================================\n");
-
+    // Zero OTP leak in response
     return NextResponse.json({
       ok: true,
       email,
-      code,
-      emailSent,
-      message: emailSent
-        ? "A 6-digit login code has been sent to your email."
-        : `Login verification code generated: ${code}`,
+      message: "A 6-digit login code has been sent to your email address.",
     });
   } catch (err: any) {
     console.error("Login OTP send error:", err);

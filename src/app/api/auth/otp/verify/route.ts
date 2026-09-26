@@ -1,12 +1,17 @@
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
-import crypto from "crypto";
-import { prisma } from "@/lib/db";
-import { createSession } from "@/lib/auth";
+import { createSession, attachSessionCookie } from "@/lib/auth";
 import { loginOtpSchema } from "@/lib/validation";
 import { hashOtp, safeEqual } from "@/lib/otp";
-import { findChallenge, incrementChallengeAttempts, deleteChallenge } from "@/lib/otp-store";
+import {
+  dbFindOtpChallenge,
+  dbIncrementOtpAttempts,
+  dbDeleteOtpChallenge,
+  dbFindUserByIdentifier,
+  dbCreateUser,
+  dbMarkEmailVerified,
+} from "@/lib/auth-db";
 
 export async function POST(req: NextRequest) {
   try {
@@ -20,10 +25,10 @@ export async function POST(req: NextRequest) {
     }
 
     const { email, code } = parsed.data;
-    const challenge = await findChallenge(email, "LOGIN");
+    const challenge = await dbFindOtpChallenge(email, "LOGIN");
 
-    if (!challenge || challenge.expiresAt <= new Date()) {
-      if (challenge) await deleteChallenge(challenge);
+    if (!challenge || new Date(challenge.expiresAt) <= new Date()) {
+      if (challenge) await dbDeleteOtpChallenge(email, "LOGIN");
       return NextResponse.json(
         { error: "The login code is invalid or has expired. Please request a new code." },
         { status: 400 }
@@ -31,7 +36,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (challenge.attempts >= 5) {
-      await deleteChallenge(challenge);
+      await dbDeleteOtpChallenge(email, "LOGIN");
       return NextResponse.json(
         { error: "Too many failed attempts. Please request a new login code." },
         { status: 429 }
@@ -40,52 +45,33 @@ export async function POST(req: NextRequest) {
 
     const valid = safeEqual(hashOtp(code), challenge.codeHash);
     if (!valid) {
-      await incrementChallengeAttempts(challenge);
+      await dbIncrementOtpAttempts(email, "LOGIN");
       return NextResponse.json(
         { error: "Incorrect verification code. Please check your email and try again." },
         { status: 400 }
       );
     }
 
-    // OTP is valid! Find or create user
-    let user: any = null;
-    try {
-      user = await prisma.user.findFirst({
-        where: { email: { equals: email, mode: "insensitive" } },
-      });
+    // Invalidate challenge immediately (single-use)
+    await dbDeleteOtpChallenge(email, "LOGIN");
 
-      if (!user) {
-        // Auto-create user on first OTP login
-        user = await prisma.user.create({
-          data: {
-            username: challenge.username || email.split("@")[0],
-            email: challenge.email,
-            passwordHash: "",
-            emailVerified: true,
-          },
-        });
-      } else if (!user.emailVerified) {
-        user = await prisma.user.update({
-          where: { id: user.id },
-          data: { emailVerified: true },
-        });
-      }
-    } catch {
-      // Database offline/connecting - prepare robust stateless session
-      user = {
-        id: "usr-" + crypto.randomBytes(8).toString("hex"),
+    // Find existing user or create verified user
+    let user = await dbFindUserByIdentifier(email);
+    if (!user) {
+      user = await dbCreateUser({
         username: challenge.username || email.split("@")[0],
         email: challenge.email,
-        displayName: challenge.username || email.split("@")[0],
-        role: "USER" as const,
+        passwordHash: "",
         emailVerified: true,
-      };
+      });
+    } else if (!user.emailVerified) {
+      await dbMarkEmailVerified(user.id);
+      user.emailVerified = true;
     }
 
-    await deleteChallenge(challenge);
-    await createSession(user.id, user);
+    const session = await createSession(user.id);
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       ok: true,
       user: {
         id: user.id,
@@ -93,6 +79,9 @@ export async function POST(req: NextRequest) {
         username: user.username,
       },
     });
+
+    attachSessionCookie(response, session.token, session.expiresAt);
+    return response;
   } catch (err: any) {
     console.error("Login OTP verify error:", err);
     return NextResponse.json(

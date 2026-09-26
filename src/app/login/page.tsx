@@ -3,7 +3,6 @@
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-
 import { loginApi, sendLoginOtpApi, verifyLoginOtpApi } from "@/services/authService";
 
 function LoginForm() {
@@ -52,7 +51,7 @@ function LoginForm() {
     setMessage(null);
     setLoading(true);
 
-    const res = await sendLoginOtpApi(otpEmail);
+    const res = await sendLoginOtpApi(otpEmail.trim());
     setLoading(false);
 
     if (!res.ok) {
@@ -61,12 +60,7 @@ function LoginForm() {
     }
 
     setOtpSent(true);
-    if (res.code) {
-      setOtpCode(res.code);
-      setMessage(`✓ Login code: ${res.code} (Sent to your email and pre-filled below)`);
-    } else {
-      setMessage(res.message || "A 6-digit verification code was sent to your email.");
-    }
+    setMessage(res.message || "A 6-digit login code has been sent to your email.");
   }
 
   // OTP Login: Step 2 - Verify Code & Login
@@ -74,9 +68,14 @@ function LoginForm() {
     e.preventDefault();
     setError(null);
     setMessage(null);
-    setLoading(true);
 
-    const res = await verifyLoginOtpApi(otpEmail, otpCode);
+    if (otpCode.length !== 6) {
+      setError("Please enter the complete 6-digit login code.");
+      return;
+    }
+
+    setLoading(true);
+    const res = await verifyLoginOtpApi(otpEmail.trim(), otpCode.trim());
     setLoading(false);
 
     if (!res.ok) {
@@ -94,18 +93,13 @@ function LoginForm() {
     setMessage(null);
     setLoading(true);
 
-    const res = await sendLoginOtpApi(otpEmail);
+    const res = await sendLoginOtpApi(otpEmail.trim());
     setLoading(false);
 
     if (!res.ok) {
       setError(res.error || "Failed to resend code.");
     } else {
-      if (res.code) {
-        setOtpCode(res.code);
-        setMessage(`✓ New login code: ${res.code} (Pre-filled below)`);
-      } else {
-        setMessage("A new 6-digit login code was sent to your email.");
-      }
+      setMessage("A new 6-digit login code has been sent to your email.");
     }
   }
 
@@ -113,7 +107,7 @@ function LoginForm() {
     <main className="max-w-md mx-auto px-4 sm:px-6 md:px-8 py-10 sm:py-16">
       <h1 className="font-display text-2xl font-semibold mb-6 text-ink">Log in</h1>
 
-      <div className="card p-4 sm:p-6 space-y-4 bg-white shadow-sm">
+      <div className="card p-4 sm:p-6 space-y-4 bg-white shadow-sm border border-line">
         {/* Mode Selector Tabs */}
         <div className="grid grid-cols-2 gap-1 bg-black/5 dark:bg-white/5 p-1 rounded-lg text-sm font-medium">
           <button
@@ -149,18 +143,23 @@ function LoginForm() {
         </div>
 
         {verified && (
-          <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-md text-sm text-emerald-700 dark:text-emerald-300 font-medium">
+          <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-md text-sm text-emerald-800 dark:text-emerald-300 font-medium">
             ✓ Email verified successfully! You can now log in below.
           </div>
         )}
 
         {loggedOut && (
-          <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-md text-sm text-blue-700 dark:text-blue-300 font-medium">
+          <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-md text-sm text-blue-800 dark:text-blue-300 font-medium">
             ✓ You have been logged out successfully.
           </div>
         )}
 
-        {message && <p className="text-sm text-good">{message}</p>}
+        {message && (
+          <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-md text-sm text-emerald-800 dark:text-emerald-300">
+            ✓ {message}
+          </div>
+        )}
+
         {error && <p className="error-text">{error}</p>}
 
         {mode === "otp" ? (
@@ -195,6 +194,8 @@ function LoginForm() {
                     onClick={() => {
                       setOtpSent(false);
                       setOtpCode("");
+                      setMessage(null);
+                      setError(null);
                     }}
                     className="text-xs text-signal hover:underline"
                   >
@@ -209,9 +210,9 @@ function LoginForm() {
                 />
               </div>
               <div>
-                <label className="label">6-digit verification code</label>
+                <label className="label">6-digit login code</label>
                 <input
-                  className="field tracking-[0.4em] font-mono text-center text-lg"
+                  className="field tracking-[0.4em] font-mono text-center text-xl font-semibold"
                   inputMode="numeric"
                   maxLength={6}
                   placeholder="••••••"
@@ -245,6 +246,7 @@ function LoginForm() {
                 className="field"
                 value={form.identifier}
                 required
+                placeholder="Username or email address"
                 onChange={(e) => setForm({ ...form, identifier: e.target.value })}
               />
             </div>
@@ -255,38 +257,12 @@ function LoginForm() {
                 type="password"
                 value={form.password}
                 required
+                placeholder="Your password"
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
               />
             </div>
             <button className="btn-primary w-full" disabled={loading}>
               {loading ? "Logging in…" : "Log in"}
-            </button>
-            <div className="relative my-2">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-line"></div>
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-white px-2 text-black/40">Or</span>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={async () => {
-                setError(null);
-                setLoading(true);
-                const res = await loginApi({ identifier: "developer", password: "password123" });
-                setLoading(false);
-                if (!res.ok) {
-                  setError(res.error || "Login failed.");
-                  return;
-                }
-                router.push(redirectPath);
-                router.refresh();
-              }}
-              disabled={loading}
-              className="btn-ghost w-full border-signal/40 text-signal hover:bg-signal/5 font-semibold"
-            >
-              ⚡ Instant Demo Login
             </button>
           </form>
         )}

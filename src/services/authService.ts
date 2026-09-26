@@ -3,7 +3,6 @@ export type AuthResult = {
   error?: string;
   message?: string;
   autoLogin?: boolean;
-  code?: string;
 };
 
 export async function loginApi(credentials: { identifier: string; password: string }): Promise<AuthResult> {
@@ -37,7 +36,6 @@ export async function sendLoginOtpApi(email: string): Promise<AuthResult> {
     return {
       ok: true,
       message: data?.message || "A verification code has been sent to your email.",
-      code: data?.code,
     };
   } catch (err: any) {
     return { ok: false, error: err?.message || "Could not reach the server." };
@@ -93,7 +91,7 @@ export async function registerApi(formData: {
     if (!res.ok) {
       return { ok: false, error: data?.error || "Registration failed." };
     }
-    return { ok: true, autoLogin: data?.autoLogin, code: data?.code };
+    return { ok: true, autoLogin: data?.autoLogin, message: data?.message };
   } catch (err: any) {
     return { ok: false, error: err?.message || "Could not reach the server." };
   }
@@ -127,7 +125,7 @@ export async function resendOtpApi(email: string): Promise<AuthResult> {
     if (!res.ok) {
       return { ok: false, error: data?.error || "Could not resend code." };
     }
-    return { ok: true, message: data?.message || "A new code was sent.", code: data?.code };
+    return { ok: true, message: data?.message || "A new code was sent." };
   } catch (err: any) {
     return { ok: false, error: err?.message || "Could not reach the server." };
   }
