@@ -15,6 +15,7 @@ enum Role {
 enum OtpPurpose {
   REGISTER
   EMAIL_CHANGE
+  LOGIN
 }
 
 model User {

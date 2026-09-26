@@ -40,7 +40,11 @@ function LoginForm() {
       return;
     }
 
-    router.push(redirectPath);
+    let finalRedirect = redirectPath;
+    if (!finalRedirect.startsWith("/") || finalRedirect.startsWith("//")) {
+      finalRedirect = "/dashboard";
+    }
+    router.push(finalRedirect);
     router.refresh();
   }
 
@@ -83,7 +87,11 @@ function LoginForm() {
       return;
     }
 
-    router.push(redirectPath);
+    let finalRedirect = redirectPath;
+    if (!finalRedirect.startsWith("/") || finalRedirect.startsWith("//")) {
+      finalRedirect = "/dashboard";
+    }
+    router.push(finalRedirect);
     router.refresh();
   }
 
