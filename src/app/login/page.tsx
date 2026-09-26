@@ -9,7 +9,7 @@ function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
   const emailParam = params.get("email") || "";
-  const initialMode = params.get("mode") === "password" ? "password" : "otp";
+  const initialMode = params.get("mode") === "otp" ? "otp" : "password";
 
   const [mode, setMode] = useState<"otp" | "password">(initialMode);
   const [form, setForm] = useState({ identifier: emailParam, password: "" });
@@ -113,21 +113,6 @@ function LoginForm() {
           <button
             type="button"
             onClick={() => {
-              setMode("otp");
-              setError(null);
-              setMessage(null);
-            }}
-            className={`py-2 rounded-md transition-all ${
-              mode === "otp"
-                ? "bg-white dark:bg-black/40 text-signal shadow-sm font-semibold"
-                : "text-black/60 dark:text-white/60 hover:text-black dark:hover:text-white"
-            }`}
-          >
-            Email + OTP
-          </button>
-          <button
-            type="button"
-            onClick={() => {
               setMode("password");
               setError(null);
               setMessage(null);
@@ -139,6 +124,21 @@ function LoginForm() {
             }`}
           >
             Password
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMode("otp");
+              setError(null);
+              setMessage(null);
+            }}
+            className={`py-2 rounded-md transition-all ${
+              mode === "otp"
+                ? "bg-white dark:bg-black/40 text-signal shadow-sm font-semibold"
+                : "text-black/60 dark:text-white/60 hover:text-black dark:hover:text-white"
+            }`}
+          >
+            Email + OTP
           </button>
         </div>
 

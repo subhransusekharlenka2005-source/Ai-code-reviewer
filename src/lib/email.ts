@@ -143,25 +143,64 @@ function deliverSmtpMessage(options: SendSmtpOptions): Promise<{ ok: boolean; re
   });
 }
 
-export async function sendMail(to: string, subject: string, html: string) {
-  const host = process.env.SMTP_HOST || "smtp.gmail.com";
-  const port = Number(process.env.SMTP_PORT) || 587;
-  const user = process.env.SMTP_USER || "";
-  const pass = process.env.SMTP_PASSWORD || "";
-  const from = process.env.EMAIL_FROM || `AI Code Reviewer <${user}>`;
-  const replyTo = user;
+import fs from "fs";
+import path from "path";
+
+function getSmtpConfig() {
+  let user = process.env.SMTP_USER;
+  let pass = process.env.SMTP_PASSWORD;
+  let host = process.env.SMTP_HOST || "smtp.gmail.com";
+  let port = Number(process.env.SMTP_PORT) || 587;
+  let from = process.env.EMAIL_FROM;
 
   if (!user || !pass) {
+    try {
+      const envPath = path.resolve(process.cwd(), ".env");
+      if (fs.existsSync(envPath)) {
+        const raw = fs.readFileSync(envPath, "utf8");
+        for (const line of raw.split("\n")) {
+          const t = line.trim();
+          if (t && !t.startsWith("#") && t.includes("=")) {
+            const idx = t.indexOf("=");
+            const k = t.slice(0, idx).trim();
+            let v = t.slice(idx + 1).trim();
+            if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+              v = v.slice(1, -1);
+            }
+            if (k === "SMTP_USER" && !user) user = v;
+            if (k === "SMTP_PASSWORD" && !pass) pass = v;
+            if (k === "SMTP_HOST" && !process.env.SMTP_HOST) host = v;
+            if (k === "SMTP_PORT" && !process.env.SMTP_PORT) port = Number(v) || 587;
+            if (k === "EMAIL_FROM" && !from) from = v;
+          }
+        }
+      }
+    } catch {}
+  }
+  return {
+    host,
+    port,
+    user: user || "",
+    pass: pass || "",
+    from: from || `AI Code Reviewer <${user}>`,
+    replyTo: user || "",
+  };
+}
+
+export async function sendMail(to: string, subject: string, html: string) {
+  const config = getSmtpConfig();
+
+  if (!config.user || !config.pass) {
     throw new Error("SMTP service is not configured. Please check environment variables.");
   }
 
   return deliverSmtpMessage({
-    host,
-    port,
-    user,
-    pass,
-    from,
-    replyTo,
+    host: config.host,
+    port: config.port,
+    user: config.user,
+    pass: config.pass,
+    from: config.from,
+    replyTo: config.replyTo,
     to,
     subject,
     html,
@@ -169,14 +208,13 @@ export async function sendMail(to: string, subject: string, html: string) {
 }
 
 export async function verifySmtpConnection(): Promise<{ ok: boolean; message: string }> {
-  const host = process.env.SMTP_HOST || "smtp.gmail.com";
-  const port = Number(process.env.SMTP_PORT) || 587;
-  const user = process.env.SMTP_USER || "";
-  const pass = process.env.SMTP_PASSWORD || "";
+  const config = getSmtpConfig();
 
-  if (!user || !pass) {
+  if (!config.user || !config.pass) {
     return { ok: false, message: "Missing SMTP_USER or SMTP_PASSWORD in environment." };
   }
+
+  const { host, port, user, pass } = config;
 
   return new Promise((resolve) => {
     const normalizedPassword = pass.replace(/\s+/g, "");
