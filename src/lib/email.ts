@@ -1,14 +1,5 @@
-import "server-only";
 import net from "net";
 import tls from "tls";
-
-const {
-  SMTP_HOST = "smtp.gmail.com",
-  SMTP_PORT = "587",
-  SMTP_USER,
-  SMTP_PASSWORD,
-  EMAIL_FROM,
-} = process.env;
 
 interface SendSmtpOptions {
   host: string;
@@ -121,7 +112,7 @@ function deliverSmtpMessage(options: SendSmtpOptions): Promise<{ ok: boolean; re
           } else if (tlsStep === 6 && resp.startsWith("354")) {
             tlsStep = 7;
             const messageId = `<${Date.now()}.${Math.random().toString(36).slice(2)}@gmail.com>`;
-            const headers = [
+            const headerLines = [
               `From: ${from}`,
               `To: ${to}`,
               replyTo ? `Reply-To: ${replyTo}` : "",
@@ -131,18 +122,14 @@ function deliverSmtpMessage(options: SendSmtpOptions): Promise<{ ok: boolean; re
               `MIME-Version: 1.0`,
               `Content-Type: text/html; charset=utf-8`,
               `Content-Transfer-Encoding: 8bit`,
-              "",
-              html,
-              ".",
-              "",
-            ]
-              .filter(Boolean)
-              .join("\r\n");
+            ].filter(Boolean);
 
-            tlsSocket?.write(headers);
+            const emailPayload = headerLines.join("\r\n") + "\r\n\r\n" + html + "\r\n.\r\n";
+            tlsSocket?.write(emailPayload);
           } else if (tlsStep === 7 && resp.startsWith("250")) {
             tlsStep = 8;
             tlsSocket?.write("QUIT\r\n");
+            cleanup();
             resolve({ ok: true, response: resp.trim() });
           } else if (tlsStep === 8 && resp.startsWith("221")) {
             cleanup();
@@ -157,25 +144,123 @@ function deliverSmtpMessage(options: SendSmtpOptions): Promise<{ ok: boolean; re
 }
 
 export async function sendMail(to: string, subject: string, html: string) {
-  if (!SMTP_USER || !SMTP_PASSWORD) {
+  const host = process.env.SMTP_HOST || "smtp.gmail.com";
+  const port = Number(process.env.SMTP_PORT) || 587;
+  const user = process.env.SMTP_USER || "";
+  const pass = process.env.SMTP_PASSWORD || "";
+  const from = process.env.EMAIL_FROM || `AI Code Reviewer <${user}>`;
+  const replyTo = user;
+
+  if (!user || !pass) {
     throw new Error("SMTP service is not configured. Please check environment variables.");
   }
 
-  const host = SMTP_HOST || "smtp.gmail.com";
-  const port = Number(SMTP_PORT) || 587;
-  const from = `AI Code Reviewer <${SMTP_USER}>`;
-  const replyTo = EMAIL_FROM || SMTP_USER;
-
-  await deliverSmtpMessage({
+  return deliverSmtpMessage({
     host,
     port,
-    user: SMTP_USER,
-    pass: SMTP_PASSWORD,
+    user,
+    pass,
     from,
     replyTo,
     to,
     subject,
     html,
+  });
+}
+
+export async function verifySmtpConnection(): Promise<{ ok: boolean; message: string }> {
+  const host = process.env.SMTP_HOST || "smtp.gmail.com";
+  const port = Number(process.env.SMTP_PORT) || 587;
+  const user = process.env.SMTP_USER || "";
+  const pass = process.env.SMTP_PASSWORD || "";
+
+  if (!user || !pass) {
+    return { ok: false, message: "Missing SMTP_USER or SMTP_PASSWORD in environment." };
+  }
+
+  return new Promise((resolve) => {
+    const normalizedPassword = pass.replace(/\s+/g, "");
+    const userB64 = Buffer.from(user).toString("base64");
+    const passB64 = Buffer.from(normalizedPassword).toString("base64");
+
+    const socket = net.connect(port, host);
+    socket.setTimeout(15000);
+
+    let step = 0;
+    let tlsSocket: tls.TLSSocket | null = null;
+
+    const cleanup = () => {
+      try { socket.destroy(); } catch {}
+      try { if (tlsSocket) tlsSocket.destroy(); } catch {}
+    };
+
+    socket.on("timeout", () => {
+      cleanup();
+      resolve({ ok: false, message: "SMTP connection timed out on port " + port });
+    });
+
+    socket.on("error", (err) => {
+      cleanup();
+      resolve({ ok: false, message: `SMTP socket connection failed: ${err.message}` });
+    });
+
+    socket.on("data", (data) => {
+      const str = data.toString();
+      if (step === 0 && str.startsWith("220")) {
+        step = 1;
+        socket.write("EHLO localhost\r\n");
+      } else if (step === 1 && str.startsWith("250")) {
+        step = 2;
+        socket.write("STARTTLS\r\n");
+      } else if (step === 2 && str.startsWith("220")) {
+        step = 3;
+        socket.removeAllListeners("data");
+        socket.removeAllListeners("error");
+        socket.removeAllListeners("timeout");
+
+        tlsSocket = tls.connect(
+          {
+            socket,
+            servername: undefined,
+            rejectUnauthorized: false,
+          },
+          () => {
+            tlsSocket?.write("EHLO localhost\r\n");
+          }
+        );
+
+        tlsSocket.setTimeout(15000);
+        tlsSocket.on("timeout", () => {
+          cleanup();
+          resolve({ ok: false, message: "TLS handshake timed out." });
+        });
+        tlsSocket.on("error", (err) => {
+          cleanup();
+          resolve({ ok: false, message: `TLS socket error: ${err.message}` });
+        });
+
+        let tlsStep = 0;
+        tlsSocket.on("data", (d) => {
+          const resp = d.toString();
+          if (tlsStep === 0 && resp.startsWith("250")) {
+            tlsStep = 1;
+            tlsSocket?.write("AUTH LOGIN\r\n");
+          } else if (tlsStep === 1 && resp.startsWith("334")) {
+            tlsStep = 2;
+            tlsSocket?.write(userB64 + "\r\n");
+          } else if (tlsStep === 2 && resp.startsWith("334")) {
+            tlsStep = 3;
+            tlsSocket?.write(passB64 + "\r\n");
+          } else if (tlsStep === 3 && resp.startsWith("235")) {
+            cleanup();
+            resolve({ ok: true, message: "SMTP authenticated successfully with Google (235 2.7.0 Accepted)." });
+          } else if (resp.startsWith("4") || resp.startsWith("5")) {
+            cleanup();
+            resolve({ ok: false, message: `SMTP Authentication rejected: ${resp.trim()}` });
+          }
+        });
+      }
+    });
   });
 }
 

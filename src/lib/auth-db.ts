@@ -78,6 +78,27 @@ function writeServerStore(data: ServerAuthData) {
   }
 }
 
+// Circuit-breaker for database connectivity (prevents 3s timeouts when offline)
+let prismaUnhealthyUntil = 0;
+
+async function tryPrisma<T>(fn: () => Promise<T>): Promise<T | null> {
+  if (Date.now() < prismaUnhealthyUntil) {
+    return null;
+  }
+  try {
+    return await fn();
+  } catch (err: any) {
+    if (
+      err?.code === "P1001" ||
+      err?.message?.includes("Can't reach database server") ||
+      err?.name === "PrismaClientInitializationError"
+    ) {
+      prismaUnhealthyUntil = Date.now() + 30000; // 30 second cooldown
+    }
+    return null;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // 1. USER OPERATIONS
 // ---------------------------------------------------------------------------
@@ -85,19 +106,17 @@ function writeServerStore(data: ServerAuthData) {
 export async function dbFindUserByIdentifier(identifier: string) {
   const norm = identifier.trim().toLowerCase();
 
-  try {
-    const user = await prisma.user.findFirst({
+  const user = await tryPrisma(() =>
+    prisma.user.findFirst({
       where: {
         OR: [
           { email: { equals: norm, mode: "insensitive" } },
           { username: { equals: identifier.trim(), mode: "insensitive" } },
         ],
       },
-    });
-    if (user) return user;
-  } catch {
-    // Database connecting or offline - fallback to server store
-  }
+    })
+  );
+  if (user) return user;
 
   const store = readServerStore();
   const found = store.users.find(
@@ -113,10 +132,8 @@ export async function dbFindUserByIdentifier(identifier: string) {
 }
 
 export async function dbFindUserById(id: string) {
-  try {
-    const user = await prisma.user.findUnique({ where: { id } });
-    if (user) return user;
-  } catch {}
+  const user = await tryPrisma(() => prisma.user.findUnique({ where: { id } }));
+  if (user) return user;
 
   const store = readServerStore();
   const found = store.users.find((u) => u.id === id);
@@ -133,22 +150,22 @@ export async function dbCheckUserExists(username: string, email: string) {
   const normEmail = email.trim().toLowerCase();
   const normUser = username.trim().toLowerCase();
 
-  try {
-    const existing = await prisma.user.findFirst({
+  const existing = await tryPrisma(() =>
+    prisma.user.findFirst({
       where: {
         OR: [
           { email: { equals: normEmail, mode: "insensitive" } },
           { username: { equals: username.trim(), mode: "insensitive" } },
         ],
       },
-    });
-    if (existing) {
-      if (existing.email.toLowerCase() === normEmail) {
-        return { exists: true, field: "email", user: existing };
-      }
-      return { exists: true, field: "username", user: existing };
+    })
+  );
+  if (existing) {
+    if (existing.email.toLowerCase() === normEmail) {
+      return { exists: true, field: "email", user: existing };
     }
-  } catch {}
+    return { exists: true, field: "username", user: existing };
+  }
 
   const store = readServerStore();
   const emailMatch = store.users.find((u) => u.email.toLowerCase() === normEmail);
@@ -171,9 +188,8 @@ export async function dbCreateUser(params: {
   const normEmail = params.email.trim().toLowerCase();
   const username = params.username.trim();
 
-  let user: User | null = null;
-  try {
-    user = await prisma.user.create({
+  let user: User | null = await tryPrisma(() =>
+    prisma.user.create({
       data: {
         id,
         username,
@@ -182,9 +198,10 @@ export async function dbCreateUser(params: {
         passwordHash: params.passwordHash,
         emailVerified: params.emailVerified ?? false,
       },
-    });
-  } catch {
-    // Server store persistence
+    })
+  );
+
+  if (!user) {
     user = {
       id,
       username,
@@ -221,12 +238,12 @@ export async function dbCreateUser(params: {
 }
 
 export async function dbUpdateUserPassword(userId: string, newPasswordHash: string) {
-  try {
-    await prisma.user.update({
+  await tryPrisma(() =>
+    prisma.user.update({
       where: { id: userId },
       data: { passwordHash: newPasswordHash },
-    });
-  } catch {}
+    })
+  );
 
   const store = readServerStore();
   const u = store.users.find((x) => x.id === userId);
@@ -238,12 +255,12 @@ export async function dbUpdateUserPassword(userId: string, newPasswordHash: stri
 }
 
 export async function dbMarkEmailVerified(userId: string) {
-  try {
-    await prisma.user.update({
+  await tryPrisma(() =>
+    prisma.user.update({
       where: { id: userId },
       data: { emailVerified: true },
-    });
-  } catch {}
+    })
+  );
 
   const store = readServerStore();
   const u = store.users.find((x) => x.id === userId);
@@ -274,12 +291,12 @@ export async function dbSaveOtpChallenge(params: {
   const id = "otp_" + crypto.randomBytes(8).toString("hex");
 
   // Try Prisma
-  try {
+  await tryPrisma(async () => {
     await prisma.otpChallenge.deleteMany({
       where: { email: normEmail, purpose: purpose as any },
     }).catch(() => null);
 
-    await prisma.otpChallenge.create({
+    return prisma.otpChallenge.create({
       data: {
         id,
         email: normEmail,
@@ -291,7 +308,7 @@ export async function dbSaveOtpChallenge(params: {
         attempts: 0,
       },
     });
-  } catch {}
+  });
 
   // Server store persistence
   const store = readServerStore();
@@ -314,40 +331,40 @@ export async function dbSaveOtpChallenge(params: {
 export async function dbFindOtpChallenge(email: string, purpose = "REGISTER"): Promise<StoredOtp | null> {
   const normEmail = email.trim().toLowerCase();
 
-  try {
-    const c = await prisma.otpChallenge.findFirst({
+  const c = await tryPrisma(() =>
+    prisma.otpChallenge.findFirst({
       where: { email: normEmail, purpose: purpose as any },
       orderBy: { createdAt: "desc" },
-    });
-    if (c) {
-      return {
-        id: c.id,
-        email: c.email,
-        username: c.username,
-        passwordHash: c.passwordHash,
-        codeHash: c.codeHash,
-        purpose: c.purpose,
-        expiresAt: c.expiresAt.toISOString(),
-        attempts: c.attempts,
-      };
-    }
-  } catch {}
+    })
+  );
+  if (c) {
+    return {
+      id: c.id,
+      email: c.email,
+      username: c.username,
+      passwordHash: c.passwordHash,
+      codeHash: c.codeHash,
+      purpose: c.purpose,
+      expiresAt: c.expiresAt.toISOString(),
+      attempts: c.attempts,
+    };
+  }
 
   const store = readServerStore();
-  const c = store.otpChallenges.find(
+  const found = store.otpChallenges.find(
     (x) => x.email.toLowerCase() === normEmail && x.purpose === purpose
   );
-  return c || null;
+  return found || null;
 }
 
 export async function dbIncrementOtpAttempts(email: string, purpose = "REGISTER") {
   const normEmail = email.trim().toLowerCase();
-  try {
-    await prisma.otpChallenge.updateMany({
+  await tryPrisma(() =>
+    prisma.otpChallenge.updateMany({
       where: { email: normEmail, purpose: purpose as any },
       data: { attempts: { increment: 1 } },
-    });
-  } catch {}
+    })
+  );
 
   const store = readServerStore();
   const c = store.otpChallenges.find(
@@ -361,11 +378,11 @@ export async function dbIncrementOtpAttempts(email: string, purpose = "REGISTER"
 
 export async function dbDeleteOtpChallenge(email: string, purpose = "REGISTER") {
   const normEmail = email.trim().toLowerCase();
-  try {
-    await prisma.otpChallenge.deleteMany({
+  await tryPrisma(() =>
+    prisma.otpChallenge.deleteMany({
       where: { email: normEmail, purpose: purpose as any },
-    });
-  } catch {}
+    })
+  );
 
   const store = readServerStore();
   store.otpChallenges = store.otpChallenges.filter(
@@ -383,9 +400,9 @@ export async function dbSavePasswordReset(userId: string, token: string, code: s
   const codeHash = hashOtp(code);
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
-  try {
+  await tryPrisma(async () => {
     await prisma.passwordResetToken.deleteMany({ where: { userId } }).catch(() => null);
-    await prisma.passwordResetToken.create({
+    return prisma.passwordResetToken.create({
       data: {
         id,
         userId,
@@ -393,7 +410,7 @@ export async function dbSavePasswordReset(userId: string, token: string, code: s
         expiresAt,
       },
     });
-  } catch {}
+  });
 
   const store = readServerStore();
   store.resetTokens = store.resetTokens.filter((r) => r.userId !== userId);
@@ -411,20 +428,20 @@ export async function dbFindPasswordReset(tokenOrCode: string): Promise<StoredRe
   const trimmed = tokenOrCode.trim();
 
   // 1. Try Prisma by hex token
-  try {
-    const r = await prisma.passwordResetToken.findUnique({
+  const r = await tryPrisma(() =>
+    prisma.passwordResetToken.findUnique({
       where: { token: trimmed },
-    });
-    if (r) {
-      return {
-        id: r.id,
-        userId: r.userId,
-        token: r.token,
-        codeHash: "",
-        expiresAt: r.expiresAt.toISOString(),
-      };
-    }
-  } catch {}
+    })
+  );
+  if (r) {
+    return {
+      id: r.id,
+      userId: r.userId,
+      token: r.token,
+      codeHash: "",
+      expiresAt: r.expiresAt.toISOString(),
+    };
+  }
 
   // 2. Try server store by token or 6-digit code hash
   const store = readServerStore();
@@ -440,11 +457,11 @@ export async function dbDeletePasswordReset(tokenOrCode: string) {
   const trimmed = tokenOrCode.trim();
   const hashedInput = hashOtp(trimmed);
 
-  try {
-    await prisma.passwordResetToken.deleteMany({
+  await tryPrisma(() =>
+    prisma.passwordResetToken.deleteMany({
       where: { token: trimmed },
-    });
-  } catch {}
+    })
+  );
 
   const store = readServerStore();
   store.resetTokens = store.resetTokens.filter(
@@ -454,9 +471,7 @@ export async function dbDeletePasswordReset(tokenOrCode: string) {
 }
 
 export async function dbDeletePasswordResetsForUser(userId: string) {
-  try {
-    await prisma.passwordResetToken.deleteMany({ where: { userId } });
-  } catch {}
+  await tryPrisma(() => prisma.passwordResetToken.deleteMany({ where: { userId } }));
 
   const store = readServerStore();
   store.resetTokens = store.resetTokens.filter((r) => r.userId !== userId);
@@ -468,15 +483,15 @@ export async function dbDeletePasswordResetsForUser(userId: string) {
 // ---------------------------------------------------------------------------
 
 export async function dbCreateSession(userId: string, token: string, expiresAt: Date) {
-  try {
-    await prisma.session.create({
+  await tryPrisma(() =>
+    prisma.session.create({
       data: {
         token,
         userId,
         expiresAt,
       },
-    });
-  } catch {}
+    })
+  );
 
   const store = readServerStore();
   store.sessions = store.sessions.filter((s) => s.token !== token);
@@ -491,33 +506,31 @@ export async function dbCreateSession(userId: string, token: string, expiresAt: 
 }
 
 export async function dbFindSession(token: string) {
-  try {
-    const s = await prisma.session.findUnique({
+  const s = await tryPrisma(() =>
+    prisma.session.findUnique({
       where: { token },
       include: { user: true },
-    });
-    if (s && s.expiresAt > new Date()) {
-      return { session: s, user: s.user };
-    }
-  } catch {}
+    })
+  );
+  if (s && s.expiresAt > new Date()) {
+    return { session: s, user: s.user };
+  }
 
   const store = readServerStore();
-  const s = store.sessions.find((x) => x.token === token);
-  if (!s || new Date(s.expiresAt) <= new Date()) return null;
+  const localSession = store.sessions.find((x) => x.token === token);
+  if (!localSession || new Date(localSession.expiresAt) <= new Date()) return null;
 
-  const u = store.users.find((x) => x.id === s.userId);
+  const u = store.users.find((x) => x.id === localSession.userId);
   if (!u) return null;
 
   return {
-    session: { ...s, expiresAt: new Date(s.expiresAt), createdAt: new Date(s.createdAt) },
+    session: { ...localSession, expiresAt: new Date(localSession.expiresAt), createdAt: new Date(localSession.createdAt) },
     user: { ...u, createdAt: new Date(u.createdAt), updatedAt: new Date(u.updatedAt) } as User,
   };
 }
 
 export async function dbDeleteSession(token: string) {
-  try {
-    await prisma.session.deleteMany({ where: { token } });
-  } catch {}
+  await tryPrisma(() => prisma.session.deleteMany({ where: { token } }));
 
   const store = readServerStore();
   store.sessions = store.sessions.filter((s) => s.token !== token);
@@ -525,9 +538,7 @@ export async function dbDeleteSession(token: string) {
 }
 
 export async function dbDeleteAllUserSessions(userId: string) {
-  try {
-    await prisma.session.deleteMany({ where: { userId } });
-  } catch {}
+  await tryPrisma(() => prisma.session.deleteMany({ where: { userId } }));
 
   const store = readServerStore();
   store.sessions = store.sessions.filter((s) => s.userId !== userId);
