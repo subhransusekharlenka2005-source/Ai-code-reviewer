@@ -81,8 +81,8 @@ export default function ReviewSummaryCard({
         </p>
       )}
 
-      {/* Filter Tabs by Severity */}
-      <div className="grid grid-cols-4 gap-2">
+      {/* Filter Tabs by Severity (2-cols on mobile for touch targets, 4-cols on desktop) */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <button
           type="button"
           onClick={() => onFilterChange("all")}

@@ -117,16 +117,16 @@ export default function SettingsPage() {
   }
 
   return (
-    <main className="max-w-2xl mx-auto px-8 py-14 space-y-6">
+    <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-14 space-y-6">
       <div>
-        <h1 className="font-display text-2xl font-semibold">Settings</h1>
-        <p className="text-sm text-black/60 mt-1">Manage your account details and security.</p>
+        <h1 className="font-display text-2xl sm:text-3xl font-semibold text-ink">Settings</h1>
+        <p className="text-xs sm:text-sm text-black/60 mt-1">Manage your account details and security.</p>
       </div>
 
       {error && <p className="error-text">{error}</p>}
       {message && <p className="text-sm text-good font-medium">{message}</p>}
 
-      <form onSubmit={saveProfile} className="card p-6 space-y-4">
+      <form onSubmit={saveProfile} className="card p-4 sm:p-6 space-y-4 bg-white shadow-sm">
         <h2 className="font-display text-lg font-semibold">Profile</h2>
         <div>
           <label className="label">Display Name</label>
@@ -145,7 +145,7 @@ export default function SettingsPage() {
 
       <form
         onSubmit={emailStep === "idle" ? requestEmailChange : verifyEmailChange}
-        className="card p-6 space-y-4"
+        className="card p-4 sm:p-6 space-y-4 bg-white shadow-sm"
       >
         <h2 className="font-display text-lg font-semibold">Email address</h2>
         {emailStep === "idle" ? (
@@ -197,7 +197,7 @@ export default function SettingsPage() {
         )}
       </form>
 
-      <form onSubmit={changePassword} className="card p-6 space-y-4">
+      <form onSubmit={changePassword} className="card p-4 sm:p-6 space-y-4 bg-white shadow-sm">
         <h2 className="font-display text-lg font-semibold">Password</h2>
         <div>
           <label className="label">Current password</label>

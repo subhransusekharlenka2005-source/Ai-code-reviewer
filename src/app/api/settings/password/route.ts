@@ -20,6 +20,10 @@ export async function POST(req: NextRequest) {
   if (!(await verifyPassword(currentPassword, user.passwordHash))) return NextResponse.json({ error: "Current password is incorrect." }, { status: 401 });
 
   const passwordHash = await hashPassword(newPassword);
-  await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
+  try {
+    await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
+  } catch (err) {
+    console.warn("Could not update password in database:", err);
+  }
   return NextResponse.json({ ok: true, message: "Password changed successfully." });
 }

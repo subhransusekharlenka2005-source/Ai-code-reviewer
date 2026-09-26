@@ -70,9 +70,9 @@ function VerifyAccountForm() {
   }
 
   return (
-    <main className="max-w-md mx-auto px-8 py-16">
-      <h1 className="font-display text-2xl font-semibold mb-6">Verify your email</h1>
-      <form onSubmit={verify} className="card p-6 space-y-4">
+    <main className="max-w-md mx-auto px-4 sm:px-6 md:px-8 py-10 sm:py-16">
+      <h1 className="font-display text-2xl font-semibold mb-6 text-ink">Verify your email</h1>
+      <form onSubmit={verify} className="card p-4 sm:p-6 space-y-4 bg-white shadow-sm">
         {code && (
           <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-md text-sm text-emerald-700 dark:text-emerald-300 font-medium">
             ✓ Verification Code: <span className="font-mono font-bold tracking-widest text-base">{code}</span>

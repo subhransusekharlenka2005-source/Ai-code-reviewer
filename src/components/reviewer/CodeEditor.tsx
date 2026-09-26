@@ -122,9 +122,9 @@ export default function CodeEditor({
   }
 
   return (
-    <section className="card flex flex-col overflow-hidden bg-white">
+    <section className="card flex flex-col overflow-hidden bg-white min-w-0 max-w-full">
       {/* Editor Header Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 bg-paper2/50 border-b border-line">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3 sm:px-4 py-2.5 sm:py-3 bg-paper2/50 border-b border-line">
         <div className="flex items-center gap-2">
           <h2 className="font-display font-semibold text-sm text-ink">Code Editor</h2>
           <span className="font-mono text-xs text-black/50 bg-paper2 px-2 py-0.5 rounded">
@@ -137,7 +137,7 @@ export default function CodeEditor({
             type="button"
             onClick={loadSample}
             disabled={loading}
-            className="text-xs bg-white hover:bg-paper border border-line rounded px-2.5 py-1 font-medium text-black/70 hover:text-ink transition"
+            className="text-xs bg-white hover:bg-paper border border-line rounded px-2.5 py-1 font-medium text-black/70 hover:text-ink transition active:scale-95"
           >
             Load {language} Example
           </button>
@@ -153,11 +153,11 @@ export default function CodeEditor({
       </div>
 
       {/* Editor Body with Line Numbers */}
-      <div className="relative flex flex-1 min-h-[460px] font-mono text-sm leading-6">
-        {/* Line Numbers Gutter */}
+      <div className="relative flex flex-1 min-h-[280px] sm:min-h-[380px] lg:min-h-[460px] font-mono text-xs sm:text-sm leading-5 sm:leading-6 overflow-hidden">
+        {/* Line Numbers Gutter (hidden on tiny screens to optimize code width) */}
         <div
           aria-hidden="true"
-          className="w-12 bg-paper2/30 text-black/30 select-none py-3 pr-2 text-right border-r border-line/60 font-mono text-xs overflow-hidden"
+          className="hidden sm:block w-10 sm:w-12 bg-paper2/30 text-black/30 select-none py-3 pr-2 text-right border-r border-line/60 font-mono text-xs overflow-hidden shrink-0"
         >
           {Array.from({ length: Math.max(lineCount, 1) }).map((_, i) => (
             <div key={i}>{i + 1}</div>
@@ -166,7 +166,7 @@ export default function CodeEditor({
 
         {/* Code Textarea */}
         <textarea
-          className="flex-1 p-3 font-mono text-sm text-ink bg-transparent resize-none outline-none leading-6"
+          className="w-full flex-1 p-3 font-mono text-xs sm:text-sm text-ink bg-transparent resize-none outline-none leading-5 sm:leading-6 overflow-x-auto whitespace-pre min-w-0"
           spellCheck={false}
           value={code}
           placeholder={`Paste your ${language} code here, or click "Load ${language} Example" above...`}
@@ -181,10 +181,10 @@ export default function CodeEditor({
           {code.length} characters
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
           <button
             type="button"
-            className="btn-ghost text-xs"
+            className="btn-ghost text-xs flex-1 sm:flex-initial py-2 sm:py-1.5 px-3"
             onClick={onFix}
             disabled={loading || !code.trim()}
           >
@@ -192,11 +192,11 @@ export default function CodeEditor({
           </button>
           <button
             type="button"
-            className="btn-primary text-xs"
+            className="btn-primary text-xs flex-1 sm:flex-initial py-2 sm:py-1.5 px-4"
             onClick={onReview}
             disabled={loading || !code.trim()}
           >
-            {loading ? "Analyzing code…" : "Review with AI"}
+            {loading ? "Analyzing…" : "Review with AI"}
           </button>
         </div>
       </div>

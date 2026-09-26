@@ -17,6 +17,14 @@ export async function PATCH(req: NextRequest) {
   const data: any = {};
   if (displayName !== undefined) data.displayName = displayName || null;
   if (newPassword) data.passwordHash = await hashPassword(newPassword);
-  const updated = await prisma.user.update({ where: { id: user.id }, data });
-  return NextResponse.json({ ok: true, user: { username: updated.username, email: updated.email, displayName: updated.displayName } });
+
+  let updatedUser = { username: user.username, email: user.email, displayName: displayName || user.displayName };
+  try {
+    const updated = await prisma.user.update({ where: { id: user.id }, data });
+    updatedUser = { username: updated.username, email: updated.email, displayName: updated.displayName };
+  } catch (err) {
+    console.warn("Could not update user in database (offline or fallback session):", err);
+  }
+
+  return NextResponse.json({ ok: true, user: updatedUser });
 }

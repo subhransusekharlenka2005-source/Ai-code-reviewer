@@ -58,14 +58,14 @@ export default function ModelSelector({
   const current = MODEL_OPTIONS.find((m) => m.id === selectedModel) || MODEL_OPTIONS[0];
 
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+    <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
       <label htmlFor="model-select" className="text-xs font-semibold text-black/60 font-mono uppercase shrink-0">
         Review Model:
       </label>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 w-full sm:w-auto">
         <select
           id="model-select"
-          className="field text-sm font-medium py-1.5 min-w-[220px]"
+          className="field text-sm font-medium py-1.5 w-full sm:w-[240px]"
           value={selectedModel}
           onChange={(e) => {
             const opt = MODEL_OPTIONS.find((m) => m.id === e.target.value) || MODEL_OPTIONS[0];
@@ -80,7 +80,7 @@ export default function ModelSelector({
           ))}
         </select>
         <span
-          className={`hidden md:inline-block text-[11px] font-mono px-2 py-0.5 rounded border whitespace-nowrap ${current.badgeColor}`}
+          className={`hidden lg:inline-block text-[11px] font-mono px-2 py-0.5 rounded border whitespace-nowrap ${current.badgeColor}`}
         >
           {current.badge}
         </span>

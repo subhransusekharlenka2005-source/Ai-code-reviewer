@@ -43,9 +43,9 @@ export default function RegisterPage() {
 
   if (sent) {
     return (
-      <main className="max-w-md mx-auto px-8 py-20">
-        <div className="card p-8 text-center space-y-4">
-          <h1 className="font-display text-xl font-semibold">Check your email</h1>
+      <main className="max-w-md mx-auto px-4 sm:px-6 md:px-8 py-10 sm:py-20">
+        <div className="card p-6 sm:p-8 text-center space-y-4 bg-white shadow-sm">
+          <h1 className="font-display text-xl font-semibold text-ink">Check your email</h1>
           <p className="text-sm text-black/60">
             A 6-digit verification code was sent to <b>{form.email}</b>.
           </p>
@@ -70,9 +70,9 @@ export default function RegisterPage() {
   }
 
   return (
-    <main className="max-w-md mx-auto px-8 py-16">
-      <h1 className="font-display text-2xl font-semibold mb-6">Create your account</h1>
-      <form onSubmit={onSubmit} className="card p-6 space-y-4">
+    <main className="max-w-md mx-auto px-4 sm:px-6 md:px-8 py-10 sm:py-16">
+      <h1 className="font-display text-2xl font-semibold mb-6 text-ink">Create your account</h1>
+      <form onSubmit={onSubmit} className="card p-4 sm:p-6 space-y-4 bg-white shadow-sm">
         <div><label className="label">Username</label><input className="field" value={form.username} required minLength={3} onChange={(e) => setForm({ ...form, username: e.target.value })} /></div>
         <div><label className="label">Email</label><input className="field" type="email" value={form.email} required onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
         <div><label className="label">Password</label><input className="field" type="password" value={form.password} required minLength={8} onChange={(e) => setForm({ ...form, password: e.target.value })} /></div>

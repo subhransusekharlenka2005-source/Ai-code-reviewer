@@ -29,14 +29,12 @@ export default async function HistoryPage() {
   }
 
   return (
-    <main className="max-w-4xl mx-auto px-6 py-12">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="font-display text-2xl font-semibold">My Review History</h1>
-          <p className="text-sm text-black/60 mt-1">
-            Review past submissions, examine fixed solutions, or reload code back into the reviewer.
-          </p>
-        </div>
+    <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+      <div className="mb-6">
+        <h1 className="font-display text-2xl sm:text-3xl font-semibold text-ink">My Review History</h1>
+        <p className="text-xs sm:text-sm text-black/60 mt-1">
+          Review past submissions, examine fixed solutions, or reload code back into the reviewer.
+        </p>
       </div>
 
       <HistoryViewer initialReviews={reviews} />

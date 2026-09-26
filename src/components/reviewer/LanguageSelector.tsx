@@ -30,13 +30,13 @@ export default function LanguageSelector({
   disabled = false,
 }: LanguageSelectorProps) {
   return (
-    <div className="flex items-center gap-2">
-      <label htmlFor="language-select" className="text-xs font-semibold text-black/60 font-mono uppercase">
+    <div className="flex items-center gap-2 w-full sm:w-auto">
+      <label htmlFor="language-select" className="text-xs font-semibold text-black/60 font-mono uppercase shrink-0">
         Language:
       </label>
       <select
         id="language-select"
-        className="field max-w-[200px] text-sm font-medium py-1.5"
+        className="field w-full sm:w-[170px] text-sm font-medium py-1.5"
         value={language}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}

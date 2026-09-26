@@ -110,10 +110,10 @@ function LoginForm() {
   }
 
   return (
-    <main className="max-w-md mx-auto px-8 py-16">
-      <h1 className="font-display text-2xl font-semibold mb-6">Log in</h1>
+    <main className="max-w-md mx-auto px-4 sm:px-6 md:px-8 py-10 sm:py-16">
+      <h1 className="font-display text-2xl font-semibold mb-6 text-ink">Log in</h1>
 
-      <div className="card p-6 space-y-4">
+      <div className="card p-4 sm:p-6 space-y-4 bg-white shadow-sm">
         {/* Mode Selector Tabs */}
         <div className="grid grid-cols-2 gap-1 bg-black/5 dark:bg-white/5 p-1 rounded-lg text-sm font-medium">
           <button
