@@ -70,7 +70,11 @@ async function deliverSmtpMessage(options: SendSmtpOptions): Promise<{ ok: boole
   const userB64 = Buffer.from(cleanUser).toString("base64");
   const passB64 = Buffer.from(normalizedPassword).toString("base64");
 
-  const socket = net.connect(port || 587, host || "smtp.gmail.com");
+  const socket = net.connect({
+    port: port || 587,
+    host: host || "smtp.gmail.com",
+    family: 4,
+  });
   socket.setTimeout(25000);
 
   const cleanup = () => {
@@ -279,7 +283,11 @@ export async function verifySmtpConnection(): Promise<{ ok: boolean; message: st
     const userB64 = Buffer.from(user).toString("base64");
     const passB64 = Buffer.from(normalizedPassword).toString("base64");
 
-    const socket = net.connect(port, host);
+    const socket = net.connect({
+      port,
+      host,
+      family: 4,
+    });
     socket.setTimeout(15000);
 
     let step = 0;

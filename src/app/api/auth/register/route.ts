@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           error:
-            "Could not deliver verification email. Please verify your email address or try again shortly.",
+            "Could not deliver verification email. Details: " + (mailError?.message || String(mailError)),
         },
         { status: 502 }
       );
