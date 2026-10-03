@@ -1,0 +1,144 @@
+{
+  "users": [
+    {
+      "id": "usr_e8bcefd1ac4f0139b11fe2b0",
+      "username": "usr_1790442343030",
+      "email": "test_1790442343030@example.com",
+      "displayName": "usr_1790442343030",
+      "passwordHash": "$2a$12$C597BI92Z0DX3CkFlO39QulJ/LEkEdwzK5bMSvpkej94FHaXIiLH6",
+      "role": "USER",
+      "emailVerified": true,
+      "createdAt": "2026-09-26T17:06:04.125Z",
+      "updatedAt": "2026-09-26T17:06:27.195Z"
+    },
+    {
+      "id": "usr_acd6a43f2e9e338b0df54e07",
+      "username": "user_1790443271548",
+      "email": "dev_1790443271548@example.com",
+      "displayName": "user_1790443271548",
+      "passwordHash": "$2a$12$FXL0TNQQnZzbVBzHwLGIfumyWKZy52EB9nk6Gqfn.QnSozuhW/Chm",
+      "role": "USER",
+      "emailVerified": true,
+      "createdAt": "2026-09-26T17:21:14.289Z",
+      "updatedAt": "2026-09-26T17:21:15.368Z"
+    },
+    {
+      "id": "usr_e006508911cdc01a12f6ba0f",
+      "username": "user_1790443307351",
+      "email": "dev_1790443307351@example.com",
+      "displayName": "user_1790443307351",
+      "passwordHash": "$2a$12$Y9JjntzhRdZF9F5JFHV4t.edoJX7j4kp.wTioYT3T42ePw0XJo.Um",
+      "role": "USER",
+      "emailVerified": true,
+      "createdAt": "2026-09-26T17:21:50.066Z",
+      "updatedAt": "2026-09-26T17:21:50.517Z"
+    },
+    {
+      "id": "usr_86a99c41b29f4a46fa8e92fc",
+      "username": "user_1790443332142",
+      "email": "dev_1790443332142@example.com",
+      "displayName": "user_1790443332142",
+      "passwordHash": "$2a$12$JlrpYiAuMD3CBvQLAhBsD.olf3wIB7t0k8sn0AGCL9CrSgOkD5NJ.",
+      "role": "USER",
+      "emailVerified": true,
+      "createdAt": "2026-09-26T17:22:14.864Z",
+      "updatedAt": "2026-09-26T17:22:15.322Z"
+    },
+    {
+      "id": "usr_manual",
+      "username": "manualuser",
+      "email": "manual@example.com",
+      "displayName": "manual",
+      "passwordHash": "$2a$12$Ua/Akkkr2BEesjiO/Y9ZFuFwnW0bZActigHIAtWoViDIJORy/5kz.",
+      "role": "USER",
+      "emailVerified": true,
+      "createdAt": "2026-09-26T19:45:23.868Z",
+      "updatedAt": "2026-09-26T19:45:23.868Z"
+    },
+    {
+      "id": "usr_bd042402fa63516bd03b1f0b",
+      "username": "subhuuusekhar",
+      "email": "subhuuusekhar@gmail.com",
+      "displayName": "subhuuusekhar",
+      "passwordHash": "$2a$12$JgVVHeC9IvaQU2v5MMubWuqpCPMyeofwfaEoRR9N7/2wWqfcNf3JW",
+      "role": "USER",
+      "emailVerified": true,
+      "createdAt": "2026-09-26T19:58:02.588Z",
+      "updatedAt": "2026-09-26T19:58:02.588Z"
+    },
+    {
+      "id": "usr_fbc2199281746a33377cb251",
+      "username": "subhuuu",
+      "email": "subhransusekhar2233@gmail.com",
+      "displayName": "subhuuu",
+      "passwordHash": "$2a$12$lFVu7Ar1DTDFK22tLgB4ouVhIyMmRgLg8h4VM0p/7M3CzJgOY.BhG",
+      "role": "USER",
+      "emailVerified": true,
+      "createdAt": "2026-10-03T15:46:55.910Z",
+      "updatedAt": "2026-10-03T15:46:55.910Z"
+    }
+  ],
+  "sessions": [
+    {
+      "id": "sess_711c4cc4a95c56b0",
+      "token": "866e7ad088386c6002273f89fa9885297c69214b1270dbf6caad3379bdd805d8",
+      "userId": "usr_manual",
+      "expiresAt": "2026-10-26T19:45:46.287Z",
+      "createdAt": "2026-09-26T19:45:46.288Z"
+    },
+    {
+      "id": "sess_92277c043b80c9c1",
+      "token": "d0aa7874490467994f0cd7cdc91e18112a975049fa4f8f96ef5f7459134d67f9",
+      "userId": "usr_bd042402fa63516bd03b1f0b",
+      "expiresAt": "2026-10-26T19:58:02.590Z",
+      "createdAt": "2026-09-26T19:58:02.591Z"
+    },
+    {
+      "id": "sess_2e55bde1bf60010e",
+      "token": "c12e4b32316f1cf0d08484dde293a1be6943484ad9cfa921b4f5d543be35696a",
+      "userId": "usr_fbc2199281746a33377cb251",
+      "expiresAt": "2026-11-02T15:46:55.913Z",
+      "createdAt": "2026-10-03T15:46:55.915Z"
+    },
+    {
+      "id": "sess_ef303b9403ed6cfc",
+      "token": "3af397d42baf937bfc73c8219655ffedf455f21c952a9868ad61bad30fc8d009",
+      "userId": "usr_manual",
+      "expiresAt": "2026-11-02T16:04:44.398Z",
+      "createdAt": "2026-10-03T16:04:44.400Z"
+    }
+  ],
+  "otpChallenges": [
+    {
+      "id": "otp_3a93beddd02fde26",
+      "email": "sipu9645+test1790444027402@gmail.com",
+      "username": "dev_1790444027402",
+      "passwordHash": "$2a$12$yPYCh/ismcwMHNUfKFRUS.4vS.z6orfULIKb/sBk7403eDvE.AZTO",
+      "codeHash": "09c9a536134d75940e38793e1b462a583416b06686e2f6d9158d074301f3a79a",
+      "purpose": "REGISTER",
+      "expiresAt": "2026-09-26T17:43:50.479Z",
+      "attempts": 0
+    },
+    {
+      "id": "otp_75c789cf3ca1de51",
+      "email": "sipu9645@gmail.com",
+      "username": "sipu9645",
+      "passwordHash": "",
+      "codeHash": "937cc97c7666911278231d141fa516c4f8b814c44e0a8276bf568fb55a75818f",
+      "purpose": "LOGIN",
+      "expiresAt": "2026-09-26T17:43:55.297Z",
+      "attempts": 0
+    },
+    {
+      "id": "otp_b069c5979f30dfb3",
+      "email": "tester@example.com",
+      "username": "tester",
+      "passwordHash": "$2a$12$pA7ruZslgGMzoq./QqtCgOJBfjEDtd4uymN4xsW/v69vC6SRenppK",
+      "codeHash": "11ec6dea377a12f0970c4865378b8243cae07dec3094361b5420fb1502058e22",
+      "purpose": "REGISTER",
+      "expiresAt": "2026-09-26T19:51:30.912Z",
+      "attempts": 0
+    }
+  ],
+  "resetTokens": []
+}

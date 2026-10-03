@@ -50,31 +50,39 @@ interface ServerAuthData {
 const DATA_DIR = path.resolve(process.cwd(), ".data");
 const STORE_FILE = path.join(DATA_DIR, "auth-store.json");
 
+let memoryStore: ServerAuthData | null = null;
+
 function readServerStore(): ServerAuthData {
+  if (memoryStore) return memoryStore;
   try {
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
     if (!fs.existsSync(STORE_FILE)) {
       const initial: ServerAuthData = { users: [], sessions: [], otpChallenges: [], resetTokens: [] };
-      fs.writeFileSync(STORE_FILE, JSON.stringify(initial, null, 2), "utf8");
+      try { fs.writeFileSync(STORE_FILE, JSON.stringify(initial, null, 2), "utf8"); } catch {}
+      memoryStore = initial;
       return initial;
     }
     const content = fs.readFileSync(STORE_FILE, "utf8");
-    return JSON.parse(content);
+    memoryStore = JSON.parse(content);
+    return memoryStore!;
   } catch {
-    return { users: [], sessions: [], otpChallenges: [], resetTokens: [] };
+    const initial: ServerAuthData = { users: [], sessions: [], otpChallenges: [], resetTokens: [] };
+    memoryStore = initial;
+    return initial;
   }
 }
 
 function writeServerStore(data: ServerAuthData) {
+  memoryStore = data;
   try {
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
     fs.writeFileSync(STORE_FILE, JSON.stringify(data, null, 2), "utf8");
   } catch (err) {
-    console.error("Failed to persist auth store:", err);
+    console.warn("Failed to persist auth store to disk (likely on Vercel), but updated in memory.");
   }
 }
 
